@@ -6,6 +6,7 @@
 from planet import mubar
 from constants import kb,Rconst,m_H
 from math import log10
+from bisect import bisect_left,bisect_right
 from os import linesep
 
 def generic_diffusion(minor,major,T):
@@ -111,6 +112,14 @@ def read_pt_profile():
             alt.append(float(l.split()[2])*1e3)
             t.append(float(l.split()[3]))
       return p,alt,t
+
+#Handy lambdas for finding the nearest,next above, and next below value in a list.
+find_nearest = lambda vector,value : min(range(len(vector)), key = lambda i: abs(vector[i]-value))
+find_above = lambda vector,value : max(bisect_right(vector,value)-1,0)
+find_below = lambda vector,value : bisect_left(vector,value)
+
+#lambda function for finding the luminosity (in solar) for a 0.2<M<0.85 M_solar star (Cuntz & Wang, 2018)
+f_lum_CW18 = lambda M : M**(-141.7*M**4. + 232.4*M**3. - 129.1*M**2. + 33.29*M + 0.215)
 
 def new_func():
       return

@@ -11,6 +11,7 @@ from scipy.interpolate import interp1d,interp2d
 
 #Custom functions and constants
 from modules import crossover_mass,read_baraffe,read_baraffe_grid
+from modules import find_nearest,find_above,find_below,f_lum_CW18
 from constants import m_Earth,r_Earth,flux_Earth
 from constants import l_Sun,m_Sun,r_Sun
 from constants import sigma,m_H,G,kb,Rconst
@@ -29,25 +30,18 @@ diags = True
 finediags = False
 save_plots = True; plotdir = "saved_plots/"
 
-#Handy lambda for finding the nearest value in a list.
-find_nearest = lambda vector,value : min(range(len(vector)), key = lambda i: abs(vector[i]-value))
-
-#lambda function for finding the luminosity (in solar) for a 0.2<M<0.85 M_solar star (Cuntz & Wang, 2018)
-f_lum_CW18 = lambda M : M**(-141.7*M**4. + 232.4*M**3. - 129.1*M**2. + 33.29*M + 0.215)
-
 #Read in initial Baraffe et al. (2015; A&A), establish finer age grid and interpolate luminosity
-match1,a1,l1,message1 = read_baraffe(m_star)
-print("Remember, if you want to do the upper end of the uncertainty in age, you'll need to extrapolate!")
-#experimental two-dimensional cubic spline for fitting both mass and age
+#TODO To do the upper end of the uncertainty in age, we'll need to extrapolate
 mall,ageall,tempall,lumall,gravall,limits = read_baraffe_grid()
 masses = sorted(list(set(mall)))
-next_mass = masses[masses.index(match1)+1]
-print(f"masses = {masses}")
-f_star = interp2d(ageall,mall,lumall,kind='cubic',fill_value=-1)
-#new_age = logspace(log10(limits[0]),log10(limits[1]),2000,endpoint=True)
+previous_mass = masses[find_below(masses,m_star)]
+next_mass = masses[find_above(masses,m_star)]
+if diags:
+      print(f"Star is located between {previous_mass:5.3f} and {next_mass:5.3f} solar masses")
+#TODO this isn't accurate; needs to know what the age limits are for adjacent masses, not global values
 new_age = linspace(limits[0],limits[1],2000,endpoint=True)
-print(f"Limits of interpolation space = [{limits[0]:8.5f}-{limits[1]:8.5f}]")
 m_vec = [m_star]*len(new_age)
+match1,a1,l1,message1 = read_baraffe(previous_mass-0.001)
 flum1 = interp1d(a1,l1,kind='cubic')
 age1 = linspace(min(a1),max(a1),num=2000,endpoint=True)
 lum1 = flum1(age1)
@@ -63,7 +57,7 @@ zage2 = [0] + age2
 lum2.tolist()
 luminosity = lum1; age = age1; zage = zage1; match = match1; message = message1
 
-if interp_lum:
+if m_star not in masses:
       ageinter = [a for a in linspace(max(min(a1),min(a2)),min(max(a1),max(a2)),num=2000,endpoint=True)]
       zageinter = [0] + ageinter
       lum1inter = flum1(ageinter); lum2inter = flum2(ageinter)
