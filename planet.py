@@ -2,7 +2,7 @@
 from constants import m_H
 
 #Star-specific variables
-interp_lum = True #Interpolate Baraffe et al. luminosities to match stellar mass
+norm_lum = True   #Normalize interpolated Baraffe et al. luminosity to match stellar luminosity
 m_star = 0.437    #solar masses
 r_star = 0.4232   #solar radii
 age_star = 7.9    #stellar age in Gyr
@@ -30,8 +30,8 @@ efficiencies = [0.1, 0.1, 0.1, 0.01, 0.01] #escape efficiency epsilon for each c
 mubar = [envelope_comp[i]*envelope_compm[i] for i in range(len(envelope_comp))]
 
 #Variables related to escape
-do_emp_sat = False   #empirically match the saturated and subsaturated regime rates from Sanz-Forcada et al. (2011), eq. 5
-do_euv_sat = False   #Use the empirical EUV flux saturation from Peacock et al. (2020) (HAZMAT VI)
+do_emp_sat = True   #empirically match the saturated and subsaturated regime rates from Sanz-Forcada et al. (2011), eq. 5
+do_euv_sat = True   #Use the empirical EUV flux saturation from Peacock et al. (2020) (HAZMAT VI)
 do_emp_scale = True  #Use the empirical X and EUV flux evolution from Peacock et al. (2020) (HAZMAT VI) instead of Sanz-Forcada et al.
 xuv_threshold = 1.E4 #erg/cm2/s = flux threshold for X-ray driven escape fluxes; 
 #                       notional value ~7.E3 from Owen & Jackson (2012; MNRAS)

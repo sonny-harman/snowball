@@ -20,7 +20,7 @@ from constants import euv_a,euv_b
 from planet import m_planet,r_planet,a_planet,core_frac,core_den,albedo
 from planet import envelope_frac,envelope_comp,envelope_compm,envelope_species,mubar
 from planet import m_star,age_star,l_star,d_star,J_mag_star
-from planet import interp_lum,do_euv_sat,do_emp_sat,do_emp_scale
+from planet import norm_lum,do_euv_sat,do_emp_sat,do_emp_scale
 from planet import xuv_threshold,p_photo,p_xuvcofac,mode,efficiencies
 from atmospheric_mass_estimate import atm_est
 
@@ -33,58 +33,42 @@ save_plots = True; plotdir = "saved_plots/"
 #Read in initial Baraffe et al. (2015; A&A), establish finer age grid and interpolate luminosity
 #TODO To do the upper end of the uncertainty in age, we'll need to extrapolate
 mall,ageall,tempall,lumall,gravall,limits = read_baraffe_grid()
+#TODO Kd-tree + Delauney triangulation? make regular 2-D grid + bicubic interpolation? Modified Shepard's method?
 masses = sorted(list(set(mall)))
-previous_mass = masses[find_below(masses,m_star)]
-next_mass = masses[find_above(masses,m_star)]
+mass_ind = [mall.index(m) for m in masses]; mass_ind.append(len(mall))
+ind_prev = find_below(masses,m_star); ind_next = find_above(masses,m_star)
+previous_mass = masses[ind_prev]
+ind_prev1 = mass_ind[ind_prev]; ind_next1 = mass_ind[ind_next]
+ind_prev2 = ind_next1 - 1; ind_next2 = mass_ind[ind_next+1]
+next_mass = masses[ind_next]
 if diags:
-      print(f"Star is located between {previous_mass:5.3f} and {next_mass:5.3f} solar masses")
+      print(f"Star is located between {previous_mass:5.3f} and {next_mass:5.3f} solar masses.")
 #TODO this isn't accurate; needs to know what the age limits are for adjacent masses, not global values
-new_age = linspace(limits[0],limits[1],2000,endpoint=True)
-m_vec = [m_star]*len(new_age)
-match1,a1,l1,message1 = read_baraffe(previous_mass-0.001)
-flum1 = interp1d(a1,l1,kind='cubic')
-age1 = linspace(min(a1),max(a1),num=2000,endpoint=True)
-lum1 = flum1(age1)
-age1 = [a for a in age1]
-zage1 = [0] + age1
-lum1.tolist()
-match2,a2,l2,message2 = read_baraffe(next_mass)
-flum2 = interp1d(a2,l2,kind='cubic')
-age2 = linspace(min(a2),max(a2),num=2000,endpoint=True)
-lum2 = flum2(age2)
-age2 = [a for a in age2]
-zage2 = [0] + age2
-lum2.tolist()
-luminosity = lum1; age = age1; zage = zage1; match = match1; message = message1
+a1 = ageall[ind_prev1:ind_prev2]; l1 = lumall[ind_prev1:ind_prev2]; 
+a2 = ageall[ind_next1:ind_next2]; l2 = lumall[ind_next1:ind_next2]; 
 
 if m_star not in masses:
       ageinter = [a for a in linspace(max(min(a1),min(a2)),min(max(a1),max(a2)),num=2000,endpoint=True)]
-      zageinter = [0] + ageinter
+      flum1 = interp1d(a1,l1,kind='cubic'); flum2 = interp1d(a2,l2,kind='cubic') 
       lum1inter = flum1(ageinter); lum2inter = flum2(ageinter)
-      f1 = (match2 - m_star)/(match2 - match1); f2 = (m_star - match1)/(match2 - match1)
+      f1 = (next_mass - m_star)/(next_mass - previous_mass); f2 = (m_star - previous_mass)/(next_mass - previous_mass)
       print(f1,f2)
-      flux1 = [l*l_Sun/(4*pi*(a_planet*au2m*m2cm)**2) for l in lum1]
-      flux2 = [l*l_Sun/(4*pi*(a_planet*au2m*m2cm)**2) for l in lum2]
       luminter = [10**(f1*log10(l1)+f2*log10(l2)) for l1,l2 in zip(lum1inter,lum2inter)]
-      Ltest = luminter[find_nearest(ageinter,age_star)]
+      fluxinter = [l*l_Sun/(4*pi*(a_planet*au2m*m2cm)**2) for l in luminter]
+      luminosity = luminter; age = ageinter; match = f"{f1*previous_mass + f2*next_mass:4.2f}*"
+else:
+      luminosity = lumall[ind_prev1:ind_prev2]; age = ageall[ind_prev1:ind_prev2]; match = f"{previous_mass:4.2f}" 
+if norm_lum:
+      Ltest = luminosity[find_nearest(age,age_star)]
+      luminosity = [l*l_star/Ltest for l in luminosity]
       if diags:
             print(f"L_interp({age_star:4.2f} Gyr) = {Ltest:6.4f} vs. L_obs = {l_star:6.4f} L/L_sun ({100*abs(l_star-Ltest)/l_star:6.3f}% difference)")
-      luminter = [l*l_star/Ltest for l in luminter]
-      fluxinter = [l*l_Sun/(4*pi*(a_planet*au2m*m2cm)**2) for l in luminter]
-      luminosity = luminter; age = ageinter; zage = zageinter; match = f"{f1*match1 + f2*match2:4.2f}*"; message = f"Interpolating between {match1} and {match2} solar mass stars!!!"
-figx,axx = plt.subplots()
-axx.scatter(ageall,mall,c=[log10(l) for l in lumall],cmap='coolwarm')
-cmap_obj = plt.cm.get_cmap('coolwarm')
-rgba_new = cmap_obj([log10(l)*log10(max(lumall))/log10(max(luminosity)) for l in luminosity])
-axx.scatter(age,[m_star]*len(age),c=rgba_new)
-#plt.show()
-#exit()
 
 #Identify the 'start' of the main sequence, which is roughly the minimum in the luminosity
 #     This does not work for very low-mass objects, or potentially for those with humps in
 #     luminosity evolution. Would check twice for any other cases.
 ms_start = -1
-for i in range(len(age)-2):
+for i in range(0,len(age)-2):
       if luminosity[i+1]>=luminosity[i] and luminosity[i+1]<luminosity[i+2]:
             ms_start = age[i+1]
             break
@@ -93,7 +77,6 @@ if ms_start<0:
 current_age_ind = find_nearest(age,age_star)
 current_age = age[current_age_ind]
 if diags:
-      print(message)
       print(f"Main sequence starting at {round(ms_start,4)} Gyr")
       print(f"Reported age of system: {round(age_star,3)} Gyr and Baraffe nearest age = {round(current_age,3)} Gyr")
       lum_guess = f_lum_CW18(m_star)
@@ -117,26 +100,33 @@ if do_emp_sat:
       temp = [(1.89E28*a**-1.55)/(4*pi*(a_planet*au2m*m2cm)**2.) < 6.3E-4*f for a,f in zip(age,flux)]
       tau_sat = age[argmax(temp)]
 if diags:
-      print("Sanz-Forcada et al. (2011) saturation time is "+str(round(tau_sat,4))+" Gyr.")
       if do_emp_sat and not do_emp_scale:
+            print(f"Sanz-Forcada et al. (2011) saturation time is {tau_sat:5.3} Gyr.")
             print("        ---> Using empirically-fit 'saturation' time to match saturated/subsaturated fluxes from eq. 5")
-      elif do_emp_scale:
-            print("        ---> Using instead empirical fit for M dwarfs from Peacock et al. (2020)")
 
 #X-ray (5-100 A) + EUV (100-920 A) = XUV (5-920 A)
 xray_flux = []; euv_flux = []; xuv_flux = []
 xray_scale = []; euv_scale = []; saturation = []
+
+if do_emp_scale:
 #Peacock et al. (2020) reports F_x/F_J and F_euv/F_J, which we scale with F_J_bol:
 #     F_J/F_bol = 2.5119^(m_bol - m_J), where m_bol = 5log(d_star/10 pc) - 2.5log(L/L_sun) 
 #                                         and m_J is stated in TOI-1266 discovery paper
-if do_emp_scale:
       F_J_bol = 2.5119**(5*log10(d_star/10)-2.5*log10(l_star) - J_mag_star)
+      f_euv = lambda age_gyr : 2.38*(age_gyr*1e3)**-1
+      f_xray = lambda age_gyr : 10.78*(age_gyr*1e3)**-1.36
+      tau_euv = age[min(range(len(age)), key = lambda i: f_euv(age[i]) > 8.6E-3)]
+      tau_xray = age[min(range(len(age)), key = lambda i: f_xray(age[i]) > 5.3E-3)]
+      tau_sat = max(tau_euv,tau_xray)
       if diags:
-            print(f"F_J/F_bol = {F_J_bol:8.2e}")
+            print("Using EUV/X-ray empirical fit for M dwarfs from Peacock et al. (2020)")
+            print(f"    Saturation time is set by larger of EUV & X-ray saturation at {tau_sat:5.3f} Gyr.")
+            print(f"    ----> F_J/F_bol = {F_J_bol:8.2e}")
+
 for i in range(len(age)):
       if do_emp_scale: #empirical scaling from Peacock et al. (2020) - HAZMAT VI
-            euv_lum = luminosity[i]*l_Sun*min(8.6E-3,2.38*(age[i]*1E3)**-1)*F_J_bol
-            xray_lum = luminosity[i]*l_Sun*min(5.3E-3,10.78*(age[i]*1e3)**-1.36)*F_J_bol
+            euv_lum = luminosity[i]*l_Sun*min(8.6E-3,f_euv(age[i]))*F_J_bol
+            xray_lum = luminosity[i]*l_Sun*min(5.3E-3,f_xray(age[i]))*F_J_bol
       else:
             euv_lum = 10**(29.12+euv_a - (1.24+euv_b)*log10(age[i]))
             if do_euv_sat:
@@ -299,7 +289,7 @@ if plots:
       fig1,ax1 = plt.subplots()
       if diags:
             ax1.plot(a1,l1,'r--') #raw Baraffe data
-            if interp_lum:
+            if m_star not in masses:
                   ax1.plot(a2,l2,'r--') #other Baraffe data
                   ax1.plot([1.1*max(age),1.1*max(age)],[0.98*f_lum_CW18(m_star),1.02*f_lum_CW18(m_star)],color='gray')
       ax1.plot(age,luminosity,'k')
