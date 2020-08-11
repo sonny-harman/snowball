@@ -1,0 +1,28 @@
+#Taken from Pavlov, 2019 Surveys in Geophysics
+O2–N2, 0.829e-17, 0.724, "Mason and Marrero (1970)"
+O–N2, 0.969-17, 0.774, "Mason and Marrero (1970)"
+He–N2, 4.335-17, 0.648, Liner and Weissman (1972)
+O–O2, 0.969-17, 0.774, "Mason and Marrero (1970)"
+He–O2, 3.21-17, 0.710, "Mason and Marrero (1970)"
+H–O2, 4.672-17, 0.749, "See Pavlov (2019)"
+O–He, 3.43-17, 0.749, "Mason and Marrero (1970)"
+H–O, 4.383-17, 0.760, "See Pavlov (2019)"
+H–He, 10.42-17, 0.732, "Mason and Marrero (1970)"
+Ar–N2, 0.663-17, 0.752, "Mason and Marrero (1970)"
+Ar–O2, 0.717-17, 0.736, "Mason and Marrero (1970)"
+Ar–O, 0.551-17, 0.841, "Mason and Marrero (1970)"
+Ar–He, 3.622-17, 0.689, Liner and Weissman (1972)
+N–N2, 0.969-17, 0.774, "Mason and Marrero (1970)"
+N–O, 1.496-17, 0.7427, "See Pavlov (2019)"
+N–H, 3.859-17, 0.748, "See Pavlov (2019)"
+N–He, 3.776-17, 0.718, "See Pavlov (2019)"
+H2–O2, 3.060-17, 0.732, "Mason and Marrero (1970)"
+H2–H, 8.292-17, 0.728, "Mason and Marrero (1970)"
+#Custom 4
+#A*T**B*exp(C/T)*(ln(D/T))**-2
+H2-N2, 1.129E20, 0.548, 2.8, 3.16E7
+H2-He, 1.981E20, 0.510, 0., 5.34E6
+#Custom 7
+#A*T**B*(C + D*T**0.5 + E*T + F*T**1.5 + G*T**2)*1.E17
+H-N2, 5.281, 0.71, 1, 0, 1.234E-5, 0, 2.509E-8
+H2-O, 1., 0.5, 12.32, -0.3501, 0.03174, -6.450E-4, 5.138E-6
