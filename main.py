@@ -10,7 +10,7 @@ from numpy import linspace,logspace,argmax
 from scipy.interpolate import interp1d,interp2d
 
 #Custom functions and constants
-from modules import crossover_mass,read_baraffe,read_baraffe_grid
+from modules import crossover_mass,read_baraffe,read_hidalgo
 from modules import find_nearest,find_above,find_below,f_lum_CW18
 from constants import m_Earth,r_Earth,flux_Earth
 from constants import l_Sun,m_Sun,r_Sun
@@ -20,7 +20,7 @@ from constants import euv_a,euv_b
 from planet import m_planet,r_planet,a_planet,core_frac,core_den,albedo
 from planet import envelope_frac,envelope_comp,envelope_compm,envelope_species,mubar
 from planet import m_star,age_star,l_star,d_star,J_mag_star
-from planet import norm_lum,do_euv_sat,do_emp_sat,do_emp_scale
+from planet import stellar_tracks,norm_lum,do_euv_sat,do_emp_sat,do_emp_scale
 from planet import xuv_threshold,p_photo,p_xuvcofac,mode,efficiencies
 from atmospheric_mass_estimate import atm_est
 
@@ -30,55 +30,41 @@ diags = True
 finediags = False
 save_plots = True; plotdir = "saved_plots/"
 
-#Read in initial Baraffe et al. (2015; A&A), establish finer age grid and interpolate luminosity
-#TODO To do the upper end of the uncertainty in age, we'll need to extrapolate
-mall,ageall,tempall,lumall,gravall,limits = read_baraffe_grid()
-#TODO Kd-tree + Delauney triangulation? make regular 2-D grid + bicubic interpolation? Modified Shepard's method?
-masses = sorted(list(set(mall)))
-mass_ind = [mall.index(m) for m in masses]; mass_ind.append(len(mall))
-ind_prev = find_below(masses,m_star); ind_next = find_above(masses,m_star)
-previous_mass = masses[ind_prev]
-ind_prev1 = mass_ind[ind_prev]; ind_next1 = mass_ind[ind_next]
-ind_prev2 = ind_next1 - 1; ind_next2 = mass_ind[ind_next+1]
-next_mass = masses[ind_next]
+#Read in initial luminosity data, establish finer age grid and interpolate luminosity
+#TODO To do the upper end of the uncertainty in age, we'll need to extrapolate Baraffe et al.
+if stellar_tracks =='Baraffe': #Baraffe et al. (2015; A&A)
+      a1,a2,l1,l2,m1,m2 = read_baraffe(m_star)
+elif stellar_tracks =='Hidalgo': #Hidalgo et al. (2018; ApJ)
+      a1,a2,l1,l2,m1,m2 = read_hidalgo(m_star)
 if diags:
-      print(f"Star is located between {previous_mass:5.3f} and {next_mass:5.3f} solar masses.")
-#TODO this isn't accurate; needs to know what the age limits are for adjacent masses, not global values
-a1 = ageall[ind_prev1:ind_prev2]; l1 = lumall[ind_prev1:ind_prev2]; 
-a2 = ageall[ind_next1:ind_next2]; l2 = lumall[ind_next1:ind_next2]; 
+      print(f"Star is located between {m1:5.3f} and {m2:5.3f} solar masses; using {stellar_tracks} et al. luminosity evolution")
 
-if m_star not in masses:
-      ageinter = [a for a in linspace(max(min(a1),min(a2)),min(max(a1),max(a2)),num=2000,endpoint=True)]
-      flum1 = interp1d(a1,l1,kind='cubic'); flum2 = interp1d(a2,l2,kind='cubic') 
-      lum1inter = flum1(ageinter); lum2inter = flum2(ageinter)
-      f1 = (next_mass - m_star)/(next_mass - previous_mass); f2 = (m_star - previous_mass)/(next_mass - previous_mass)
-      print(f1,f2)
-      luminter = [10**(f1*log10(l1)+f2*log10(l2)) for l1,l2 in zip(lum1inter,lum2inter)]
-      fluxinter = [l*l_Sun/(4*pi*(a_planet*au2m*m2cm)**2) for l in luminter]
-      luminosity = luminter; age = ageinter; match = f"{f1*previous_mass + f2*next_mass:4.2f}*"
-else:
-      luminosity = lumall[ind_prev1:ind_prev2]; age = ageall[ind_prev1:ind_prev2]; match = f"{previous_mass:4.2f}" 
+#set minimum and maximum ages for interpolation; Hidalgo et al. data is somewhat coarse, and can
+#     generate sinusoidal noise at very early times if not caught and set aside. Terrestrial planets
+#     like the Earth take roughly 0.03-0.1 Gyr to form; giant planets are ~0.001-0.01 Gyr (Helled et al., 2013)
+min_age = max([min(a1),min(a2),0.01]); max_age = min([max(a1),max(a2),14.5])
+age = [a for a in logspace(log10(min_age),log10(max_age),num=2000,endpoint=True)]
+flum1 = interp1d(a1,l1,kind='cubic'); flum2 = interp1d(a2,l2,kind='cubic') 
+lum1inter = flum1(age); lum2inter = flum2(age)
+f1 = (m2 - m_star)/(m2 - m1); f2 = (m_star - m1)/(m2 - m1)
+luminosity = [10**(f1*log10(l1)+f2*log10(l2)) for l1,l2 in zip(lum1inter,lum2inter)]
+match = f"{f1*m1 + f2*m2:4.2f}*"
 if norm_lum:
       Ltest = luminosity[find_nearest(age,age_star)]
       luminosity = [l*l_star/Ltest for l in luminosity]
-      if diags:
-            print(f"L_interp({age_star:4.2f} Gyr) = {Ltest:6.4f} vs. L_obs = {l_star:6.4f} L/L_sun ({100*abs(l_star-Ltest)/l_star:6.3f}% difference)")
+      print(f"L_interp({age_star:4.2f} Gyr) = {Ltest:6.4f} vs. L_obs = {l_star:6.4f} L/L_sun ({100*abs(l_star-Ltest)/l_star:6.3f}% difference)")
 
 #Identify the 'start' of the main sequence, which is roughly the minimum in the luminosity
-#     This does not work for very low-mass objects, or potentially for those with humps in
-#     luminosity evolution. Would check twice for any other cases.
+#     This does not work for very low-mass objects, so I've set it to exit gracefully.
 ms_start = -1
-for i in range(0,len(age)-2):
-      if luminosity[i+1]>=luminosity[i] and luminosity[i+1]<luminosity[i+2]:
-            ms_start = age[i+1]
-            break
-if ms_start<0:
+ms_start = age[luminosity.index(min(luminosity))]
+if ms_start == max(age):
       exit("Main sequence start was not found - check data, make sure m_star>~0.08M_Sun")
 current_age_ind = find_nearest(age,age_star)
 current_age = age[current_age_ind]
 if diags:
       print(f"Main sequence starting at {round(ms_start,4)} Gyr")
-      print(f"Reported age of system: {round(age_star,3)} Gyr and Baraffe nearest age = {round(current_age,3)} Gyr")
+      print(f"Reported age of system: {round(age_star,3)} Gyr and {stellar_tracks} nearest age = {round(current_age,3)} Gyr")
       lum_guess = f_lum_CW18(m_star)
       print(f"Cuntz & Wang (2018) L = {lum_guess:10.2e} vs. L(current_age) = {luminosity[current_age_ind]:10.2e}"
           +f"; difference of  ~{100*(luminosity[current_age_ind] - lum_guess)/luminosity[current_age_ind]:6.2f}%"
@@ -280,18 +266,13 @@ if diags:
       print(f"Present-day escape rate = {mescape_flux_t[age.index(current_age)]:8.2e} kg/s")
       print(f"                        = {escape_flux_t[age.index(current_age)]:8.2e} molec/m2/s")
       print(f"                        = {escape_flux_t[age.index(current_age)]/1e4:8.2e} molec/cm2/s")
-      #print(c_f_t[0],e_f_t[0],c_f_t[-1],e_f_t[-1])
-      #print(e_comp_t[0],e_comp_t[-1])
-      #print(e_cmp_t[0],e_cmp_t[-1])
-      #print(min(crossover_mass_t),sum(crossover_mass_t)/len(crossover_mass_t),max(crossover_mass_t),' Crossover mass evolution')
 
 if plots:
       fig1,ax1 = plt.subplots()
       if diags:
-            ax1.plot(a1,l1,'r--') #raw Baraffe data
-            if m_star not in masses:
-                  ax1.plot(a2,l2,'r--') #other Baraffe data
-                  ax1.plot([1.1*max(age),1.1*max(age)],[0.98*f_lum_CW18(m_star),1.02*f_lum_CW18(m_star)],color='gray')
+            ax1.plot(a1,l1,'r--') #lower stellar mass for luminosity interpolation
+            ax1.plot(a2,l2,'r--') #upper stellar mass for luminosity interpolation
+            ax1.plot([1.1*max(age),1.1*max(age)],[0.98*f_lum_CW18(m_star),1.02*f_lum_CW18(m_star)],color='gray')
       ax1.plot(age,luminosity,'k')
       #include saturation timescale
       ax1.plot(tau_sat,luminosity[age.index(tau_sat)],'bo')
@@ -304,8 +285,10 @@ if plots:
       ax1.text(current_age,1.1*luminosity[current_age_ind],'Today',color='gray',ha='center')
       ax1.set_xscale('log'); ax1.set_yscale('log')
       ax1.set_xlabel("Age [Gyr]"); ax1.set_ylabel("Luminosity [L/L$_{\odot}$]")
-      ax1.set_title("Baraffe et al. (2015) luminosity evolution for "+str(match)+" M$_{\odot}$ star\n"
-            +"Raw Baraffe data(r--) and interpolation(k)")
+      plt.xlim(0.9*min(age),1.2*max(age))
+      plt.ylim(0.9*min(l1),1.2*max(luminosity))
+      ax1.set_title(stellar_tracks+" et al. luminosity evolution for "+str(match)+" M$_{\odot}$ star\n"
+            +"Luminosities for bookend masses(r--) and interpolation(k)")
       plt.show()
       if save_plots:
             fig1.savefig(plotdir+'luminosity_MS_tau_i_vs_time.png',dpi=200)
@@ -319,8 +302,6 @@ if plots:
       ax2.text(current_age,1.02*m_p_t[current_age_ind],'Today',color='gray',ha='center')
       ax2.text(age[-1],m_p_t[-1]*e_f_t[-1],r"M$_{atm}$")
       ax2.text(age[-1],m_p_t[-1]*c_f_t[-1],r"M$_{core}$")
-      #for i in range(num_comps):
-      #      ax2.text(age[-1],e_cmp_t[-1][i],envelope_species[i])
       plt.show()
       if save_plots:
             fig2.savefig(plotdir+'Planet_mass_vs_time.png',dpi=200)
@@ -332,7 +313,7 @@ if plots:
       ax3.plot(age,euv_scale,'b')
       ax3.set_xscale('log'); ax3.set_yscale('log')
       ax3.set_xlabel("Age [Gyr]"); ax3.set_ylabel(r"X-ray(r)/EUV(b)/XUV(k--) sat. [L$_{\lambda}$/L$_{bol}$]")
-      ax3.set_title("Baraffe et al. (2015) X-ray, EUV, and XUV evolution "+str(match)+" M$_{\odot}$ star")
+      ax3.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution for "+str(match)+" M$_{\odot}$ star")
       plt.show()
       if save_plots:
             fig3.savefig(plotdir+'UV_scaling_vs_time.png',dpi=200)
@@ -346,19 +327,19 @@ if plots:
       print(f"XUV flux drops below 1E4 erg/cm2/s at {age[find_nearest(xuv_flux,1E4)]} Gyr.")
       ax5.set_xscale('log'); ax5.set_yscale('log')
       ax5.set_xlabel("Age [Gyr]"); ax5.set_ylabel(r"X-ray(r)/EUV(b)/XUV(k--) flux [ergs/cm2/s]")
-      ax5.set_title("Baraffe et al. (2015) X-ray, EUV, and XUV evolution "+str(match)+" M$_{\odot}$ star")
+      ax5.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution "+str(match)+" M$_{\odot}$ star")
       plt.show()
       if save_plots:
             fig5.savefig(plotdir+'UV_flux_vs_time.png',dpi=200)
 
 if plots:
       fig6,ax6 = plt.subplots()
-      ax6.plot(age,crossover_mass_t)#test_mass)#[e/1e4 for e in escape_flux_t])#test_mass)#mescape_flux_t)
+      ax6.plot(age,crossover_mass_t)
       ax6.set_xscale("log"); ax6.set_yscale('log')
-      ax6.set_xlabel("Age [Gyr]"); ax6.set_ylabel('Crossover mass [amu]')#'Escape flux [molec/cm2/s]')#'Change in mass [kg]')#r"Escape rate [kg/s]")
+      ax6.set_xlabel("Age [Gyr]"); ax6.set_ylabel('Crossover mass [amu]')
       crit_mass = find_nearest(crossover_mass_t,18.)
       ax6.plot(age[crit_mass-1:crit_mass+1],crossover_mass_t[crit_mass-1:crit_mass+1],'k-')
       ax6.text(age[crit_mass],1.1*crossover_mass_t[crit_mass],"Water")
       plt.show()
       if save_plots:
-            fig6.savefig(plotdir+'crossover_mass_vs_time.png',dpi=200)#'escape_rate_vs_time.png',dpi=200)#'mass_loss_vs_time.png',dpi=200)
+            fig6.savefig(plotdir+'crossover_mass_vs_time.png',dpi=200)

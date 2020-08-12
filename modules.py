@@ -7,7 +7,15 @@ from planet import mubar
 from constants import kb,Rconst,m_H
 from math import log10
 from bisect import bisect_left,bisect_right
-from os import linesep
+from os import linesep,listdir
+
+#Handy lambdas for finding the nearest,next above, and next below value in a list.
+find_nearest = lambda vector,value : min(range(len(vector)), key = lambda i: abs(vector[i]-value))
+find_above = lambda vector,value : bisect_right(vector,value)
+find_below = lambda vector,value : max(bisect_left(vector,value)-1,0)
+
+#lambda function for finding the luminosity (in solar) for a 0.2<M<0.85 M_solar star (Cuntz & Wang, 2018)
+f_lum_CW18 = lambda M : M**(-141.7*M**4. + 232.4*M**3. - 129.1*M**2. + 33.29*M + 0.215)
 
 def generic_diffusion(minor,major,T):
       #generic diffusion of a minor species with mean molecular weight 
@@ -35,6 +43,7 @@ def read_baraffe(mass):
       #     from Baraffe et al. (2015), online at:
       #     http://perso.ens-lyon.fr/isabelle.baraffe/BHAC15dir/
       masses = []; ages = {}; teff = {}; lums = {}; gravs = {}
+      stop_after_this = False
       with open('data/BHAC15_tracks+structure.txt','r') as fin:
             lines_after_header = fin.readlines()[45:]
       #Variables in Baraffe et al. file:
@@ -42,6 +51,9 @@ def read_baraffe(mass):
       #print(lines_after_header[0])
       for line in lines_after_header:
             if line[0] == '!' or line[0] in linesep:
+                  #only read the data until there are values on both sides of the input mass
+                  if stop_after_this == True:
+                        break
                   #reset current mass counter between blocks
                   current_mass = 0.
                   #ignore header lines for each block
@@ -52,21 +64,23 @@ def read_baraffe(mass):
                   key = round(m,4)
                   if current_mass == 0.:
                         current_mass = key
+                        if current_mass >= mass:
+                              m1 = masses[-1]; m2 = current_mass
+                              stop_after_this = True
                         ages[key] = [a]; teff[key] = [t]
                         lums[key] = [lum]; gravs[key] = [g]
                         masses.append(key)
                   elif current_mass == m:
                         ages[key].append(a); teff[key].append(t)
                         lums[key].append(lum); gravs[key].append(g)
-      #print(masses)
-      match = masses[min(range(len(masses)), key = lambda i: abs(masses[i]-mass+1.E-10))]
-      message = "read_baraffe is returning values for a "+str(match)+" solar mass star."
-      message+= "\n     - Age is in Gyr."
-      message+= "\n     - Luminosity is L/L_sun"
-      subage = ages[match]; sublum = lums[match]
-      return match,subage,sublum,message
+      age1 = ages[m1]; age2 = ages[m2]
+      lum1 = lums[m1]; lum2 = lums[m2]
+      return age1,age2,lum1,lum2,m1,m2
 
 def read_baraffe_grid():
+      #This loads the temperature and luminosity evolution
+      #     for all stars from Baraffe et al. (2015), online at:
+      #     http://perso.ens-lyon.fr/isabelle.baraffe/BHAC15dir/
       mass = []; age = []; temp = []; luminosity = []; grav = []
       count = 0 # just to make sure there's a count of the number of stellar masses
       with open('data/BHAC15_tracks+structure.txt','r') as fin:
@@ -80,9 +94,34 @@ def read_baraffe_grid():
                   if m not in mass:
                         count += 1
                   mass.append(m); age.append(a); temp.append(t); luminosity.append(lum); grav.append(g)
-      limits = [min(age),max(age),min(mass),max(mass)]
       print(f"Number of stars in grid: {count:2.0f}")
-      return mass,age,temp,luminosity,grav,limits
+      return mass,age,temp,luminosity,grav
+
+def read_hidalgo(stellar_mass):
+      #This loads the temperature and luminosity evolution 
+      #of bookending stars from Hidalgo et al. (2018), online at:
+      # http://basti-iac.oa-abruzzo.inaf.it
+      #http://basti-iac.oa-abruzzo.inaf.it/cgi-bin/track-get.py?alpha=P00&grid=P00O1D1E1Y247&metal=FEHp006&imetal=&imetalh=&mass=all&imass=&bcsel=HR
+      #[α/Fe]=+0.0, Z=0.017210, He Abundance=0.26948852, Oversh.=Yes, Diffusion=Yes, Mass loss=0.3
+      datafiles = [f for f in listdir('data/BaSTI_stars/')]
+      masses = [float(n[:2]+'.'+n[2:4]) for n in datafiles]
+      masses.sort()
+      f1 = [masses[find_below(masses,stellar_mass)], masses[find_above(masses,stellar_mass)]]
+      f2 = [f"{f:0>5.2f}".replace('.','') for f in f1]
+      for file_start in f2:
+            match = [i for i in datafiles if file_start in i]
+            with open('data/BaSTI_stars/'+match[0],'r') as fin:
+                  age = []; luminosity = []
+                  lines = fin.readlines()[5:]
+                  for line in lines:      
+                        l = line.split() #currently ignoring other data
+                        a = 10**float(l[0])/1.E9; lum = 10**float(l[1]); t = float(l[2])
+                        age.append(a); luminosity.append(lum)
+            if f2.index(file_start) == 0:
+                  a1 = age; l1 = luminosity
+            else:
+                  a2 = age; l2 = luminosity
+      return a1,a2,l1,l2,f1[0],f1[1]
 
 def read_thermo(name):
       coeffs = [[],[]]
@@ -112,14 +151,6 @@ def read_pt_profile():
             alt.append(float(l.split()[2])*1e3)
             t.append(float(l.split()[3]))
       return p,alt,t
-
-#Handy lambdas for finding the nearest,next above, and next below value in a list.
-find_nearest = lambda vector,value : min(range(len(vector)), key = lambda i: abs(vector[i]-value))
-find_above = lambda vector,value : bisect_right(vector,value)
-find_below = lambda vector,value : max(bisect_left(vector,value)-1,0)
-
-#lambda function for finding the luminosity (in solar) for a 0.2<M<0.85 M_solar star (Cuntz & Wang, 2018)
-f_lum_CW18 = lambda M : M**(-141.7*M**4. + 232.4*M**3. - 129.1*M**2. + 33.29*M + 0.215)
 
 def new_func():
       return

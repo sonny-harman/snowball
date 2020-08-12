@@ -2,7 +2,8 @@
 from constants import m_H
 
 #Star-specific variables
-norm_lum = True   #Normalize interpolated Baraffe et al. luminosity to match stellar luminosity
+stellar_tracks = 'Hidalgo' #Stellar luminosity reference options are 'Baraffe' (Baraffe et al., 2015) and 'Hidalgo' (Hidalgo et al., 2018)
+norm_lum = True   #Normalize interpolated luminosity to match stellar luminosity
 m_star = 0.437    #solar masses
 r_star = 0.4232   #solar radii
 age_star = 7.9    #stellar age in Gyr
