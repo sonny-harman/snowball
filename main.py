@@ -148,7 +148,7 @@ grav_t = [f_grav(m_planet,r_planet)] #Gravity [m/s2] at the 20 mbar level assume
 roche_t = [f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet)]
 ktide_t = [f_ktide(roche_t[-1],r_p_t[-1])]
 mu_t = [f_mu(e_comp_t[-1],envelope_compm)]
-vmr_t = [[e_comp_t[-1][i]*envelope_compm[i]/mu_t[-1] for i in range(len(envelope_compm))]]
+vmr_t = [[e_comp_t[-1][i]*mu_t[-1]/envelope_compm[i] for i in range(len(envelope_compm))]]
 epsilon_t = [f_mu(e_comp_t[-1],efficiencies)] #Re-use f_mu to get mean epsilon for composition
 escape_flux_t = []; mescape_flux_t = []
 crossover_mass_t = []; mass_change = 0.
@@ -157,12 +157,12 @@ if mode == 'forward':
       start = [0]
       end = [len(age)]
       step = [1]
-      print("Forward mode currently not implemented. Try again tomorrow.")
+      print("Solving for initial planet mass from starting mass,radius, and composition in forward mode.")
 elif mode == 'inverse':
       start = [current_age_ind,current_age_ind+1]
       end = [-1,len(age)]
       step = [-1,1]
-      print("Solving for initial planet mass from starting mass, radius, and composition in inverse mode.")
+      print("Solving for initial planet mass from present mass, radius, and composition in inverse mode.")
 else:
       exit("Unrecognized mass/radius/composition mode.")
 
