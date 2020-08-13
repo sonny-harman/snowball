@@ -21,10 +21,10 @@ a_planet = 0.1037 #Semi-major axis, au
 albedo = 0.0       #Bond albedo (dimensionless)
 
 #planet core and envelope mass fractions, envelope composition
-core_frac = 0.9   #core mass fraction
+core_frac = 0.8   #core mass fraction
 core_den = 5.E3   #core mean density, kg/m3
 envelope_frac = 1-core_frac #do the envelope by subtraction
-envelope_comp = [0.01,0.001,0. ,0.989,0.]  #surface mixing ratios - must sum to 1
+envelope_comp = [0.999,0.,0. ,0.001,0.]  #surface mixing ratios - must sum to 1
 envelope_species= ['H2','He','O','H2O','O2'] #component molecular masses [amu]
 envelope_compm= [2., 4.   ,16.,18.  ,32] #component molecular masses [amu]
 efficiencies = [0.1, 0.1, 0.1, 0.01, 0.01] #escape efficiency epsilon for each component
@@ -41,4 +41,4 @@ p_xuvcofac = m_H/1.89E-14 #kg/m2; non-varying cofactor for P_base (XUV photosphe
 #eta = 0.3         #absorption efficiency - ranges from 0.15-0.30
 
 #numerical variables
-mode = 'inverse'  #Use the escape fluxes in inverse mode to 'add' mass to present-day planet
+mode = 'forward'  #Use the escape fluxes in inverse mode to 'add' mass to present-day planet, or 'forward' to evolve some initial state

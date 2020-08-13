@@ -160,7 +160,7 @@ if mode == 'forward':
       print("Forward mode currently not implemented. Try again tomorrow.")
 elif mode == 'inverse':
       start = [current_age_ind,current_age_ind+1]
-      end = [0,len(age)]
+      end = [-1,len(age)]
       step = [-1,1]
       print("Solving for initial planet mass from starting mass, radius, and composition in inverse mode.")
 else:
@@ -220,29 +220,30 @@ for j in range(len(start)):
                   print(f'Escape flux @ {age[i]:5.3f} Gyr = {escape_flux_t[-1]:8.2e} molec/m2/s ({mflux:8.2e} kg/s)') 
             
             #update variables
-            #Append new values as we move backwards in time, then 'flip' variables
-            mass_H = -1*step[j]*mflux*dts/m_Earth #Earth masses
-            new_mass = [(j==0)*mass_H + e_comp_t[-1][j]*e_f_t[-1]*m_p_t[-1] for j in range(num_comps)]
-            #if any([m<0 for m in new_mass]):
-            #      exit("Mass of one of the reservoirs is negative."+str(new_mass))
-            new_e_frac = [m/sum(new_mass) for m in new_mass]
-            mass_change = mass_change+mflux*dts
-            m_p_t.append(m_p_t[-1]+mass_H)
-            c_f_t.append(core_frac*m_planet/m_p_t[-1])
-            e_f_t.append(1.-c_f_t[-1])
-            e_comp_t.append(new_e_frac)
-            r_p_t.append(r_p_t[-1])
-            grav_t.append(f_grav(m_p_t[-1],r_p_t[-1]))
-            roche_t.append(f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet))
-            ktide_t.append(f_ktide(roche_t[-1],r_p_t[-1]))
-            mu_t.append(f_mu(e_comp_t[-1],envelope_compm))
-            vmr_t.append([e_comp_t[-1][i]*envelope_compm[i]/mu_t[-1] for i in range(len(envelope_compm))])
-            epsilon_t.append(f_mu(e_comp_t[-1],efficiencies)) #Re-use mubar calculator to get mean epsilon
-            T_eq_t.append(f_T_eq(flux[i]*ergcm2s2Wm2,albedo))
-            if finediags:
-                  print(f'mass added = {mass_H} Earth masses, dts = {dts}, efficiency = {epsilon_t[-1]}, envelope composition = {e_comp_t[-1]}')
-            if i%10 == 5 and finediags:
-                  exit()
+            if i < len(age)-1:
+                  #Append new values as we move backwards in time, then 'flip' variables
+                  mass_H = -1*step[j]*mflux*dts/m_Earth #Earth masses
+                  new_mass = [(j==0)*mass_H + e_comp_t[-1][j]*e_f_t[-1]*m_p_t[-1] for j in range(num_comps)]
+                  #if any([m<0 for m in new_mass]):
+                  #      exit("Mass of one of the reservoirs is negative."+str(new_mass))
+                  new_e_frac = [m/sum(new_mass) for m in new_mass]
+                  mass_change = mass_change+mflux*dts
+                  m_p_t.append(m_p_t[-1]+mass_H)
+                  c_f_t.append(core_frac*m_planet/m_p_t[-1])
+                  e_f_t.append(1.-c_f_t[-1])
+                  e_comp_t.append(new_e_frac)
+                  r_p_t.append(r_p_t[-1])
+                  grav_t.append(f_grav(m_p_t[-1],r_p_t[-1]))
+                  roche_t.append(f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet))
+                  ktide_t.append(f_ktide(roche_t[-1],r_p_t[-1]))
+                  mu_t.append(f_mu(e_comp_t[-1],envelope_compm))
+                  vmr_t.append([e_comp_t[-1][i]*envelope_compm[i]/mu_t[-1] for i in range(len(envelope_compm))])
+                  epsilon_t.append(f_mu(e_comp_t[-1],efficiencies)) #Re-use mubar calculator to get mean epsilon
+                  T_eq_t.append(f_T_eq(flux[i]*ergcm2s2Wm2,albedo))
+                  if finediags:
+                        print(f'+M = {mass_H} M_Earth, dts = {dts}, efficiency = {epsilon_t[-1]}, env. comp. = {e_comp_t[-1]}')
+                  if i%10 == 5 and finediags:
+                        exit()
       
       if mode == 'inverse' and j == 0:
             #Flip variables so that they're aligned with *age* variable
@@ -257,9 +258,6 @@ for j in range(len(start)):
 
 
 e_cmp_t = [[x*a*b for x in e_comp_t[e_f_t.index(a)]] for a,b in zip(e_f_t,m_p_t)]
-mescape_flux_t.insert(0,mescape_flux_t[0])
-escape_flux_t.insert(0,escape_flux_t[0])
-crossover_mass_t.insert(0,crossover_mass_t[0])
 
 if diags:
       print(f"{max(m_p_t):6.4f}-->{min(m_p_t):6.4f} m_Earth; total mass change = {mass_change/m_Earth:6.4f} m_Earth")
