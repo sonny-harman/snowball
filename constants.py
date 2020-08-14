@@ -13,6 +13,7 @@ Rconst = kb*Na          #J/K/mol
 h = 6.626E-34           #J*s (kg*m2/s2)
 c = 2.99E8              #m/s
 sigma = 5.67E-8         #W/m2/K4
+N_A = 6.022E23          #molecules/mole
 
 m_H = 1.67E-27          #kg
 #ev = 1.60218e-19      #1 ev = 1.60218e-19 Joule

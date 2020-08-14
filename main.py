@@ -12,9 +12,10 @@ from scipy.interpolate import interp1d,interp2d
 #Custom functions and constants
 from modules import crossover_mass,read_baraffe,read_hidalgo
 from modules import find_nearest,find_above,find_below,f_lum_CW18
+from modules import calculate_water_photolysis
 from constants import m_Earth,r_Earth,flux_Earth
 from constants import l_Sun,m_Sun,r_Sun
-from constants import sigma,m_H,G,kb,Rconst
+from constants import sigma,m_H,G,kb,Rconst,N_A
 from constants import au2m,m2cm,yr2s,ergcm2s2Wm2
 from constants import euv_a,euv_b
 from planet import m_planet,r_planet,a_planet,core_frac,core_den,albedo
@@ -26,6 +27,7 @@ from atmospheric_mass_estimate import atm_est
 
 plots = True
 estimate_atmosphere = False#True
+calc_water_photo = False
 diags = True
 finediags = False
 save_plots = True; plotdir = "saved_plots/"
@@ -153,16 +155,27 @@ epsilon_t = [f_mu(e_comp_t[-1],efficiencies)] #Re-use f_mu to get mean epsilon f
 escape_flux_t = []; mescape_flux_t = []
 crossover_mass_t = []; mass_change = 0.
 
+if calc_water_photo:
+      #calculate how much water can be photolyzed through the star's age, assuming there's only H2O
+      h2o_x,h2o_euv,h2o_nuv = calculate_water_photolysis()
+      TA_temp = f_T_eq(flux[current_age_ind]*ergcm2s2Wm2,albedo)/(4*pi*(r_planet*r_Earth)**2) #assume layer is 1 m deep
+      #/s * molecules/m3 * m3 * kg/moles * moles/molecules = kg/s
+      h2o_x_mass = h2o_x * (p_photo/(kb*TA_temp)) * 0.018 / N_A 
+      h2o_euv_mass = h2o_euv * (p_photo/(kb*TA_temp)) * 0.018 / N_A
+      h2o_nuv_mass = h2o_nuv * (p_photo/(kb*TA_temp)) * 0.018 / N_A
+      if diags:
+            print(f"GJ581 present-day spectra can photolyze {h2o_x_mass+h2o_euv_mass+h2o_nuv_mass:8.3e} kg/s")
+
 if mode == 'forward':
       start = [0]
       end = [len(age)]
       step = [1]
       print("Solving for initial planet mass from starting mass,radius, and composition in forward mode.")
-elif mode == 'inverse':
+elif mode == 'reverse':
       start = [current_age_ind,current_age_ind+1]
       end = [-1,len(age)]
       step = [-1,1]
-      print("Solving for initial planet mass from present mass, radius, and composition in inverse mode.")
+      print("Solving for initial planet mass from present mass, radius, and composition in reverse mode.")
 else:
       exit("Unrecognized mass/radius/composition mode.")
 
@@ -224,6 +237,7 @@ for j in range(len(start)):
                   #Append new values as we move backwards in time, then 'flip' variables
                   mass_H = -1*step[j]*mflux*dts/m_Earth #Earth masses
                   new_mass = [(j==0)*mass_H + e_comp_t[-1][j]*e_f_t[-1]*m_p_t[-1] for j in range(num_comps)]
+                  #TODO decision tree for new mass addition based on composition, crossover mass
                   #if any([m<0 for m in new_mass]):
                   #      exit("Mass of one of the reservoirs is negative."+str(new_mass))
                   new_e_frac = [m/sum(new_mass) for m in new_mass]
@@ -245,7 +259,7 @@ for j in range(len(start)):
                   if i%10 == 5 and finediags:
                         exit()
       
-      if mode == 'inverse' and j == 0:
+      if mode == 'reverse' and j == 0:
             #Flip variables so that they're aligned with *age* variable
             c_f_t.reverse(); c_d_t.reverse()
             e_f_t.reverse(); e_comp_t.reverse()

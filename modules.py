@@ -3,11 +3,13 @@
 #     the underlying physics of the model.
 
 #mubar is the befault mean molecular weight of the atmosphere
-from planet import mubar
-from constants import kb,Rconst,m_H
+from planet import mubar,a_planet
+from constants import kb,Rconst,m_H,h,c
 from math import log10
 from bisect import bisect_left,bisect_right
 from os import linesep,listdir
+from astropy.io import fits
+from scipy.interpolate import interp1d
 
 #Handy lambdas for finding the nearest,next above, and next below value in a list.
 find_nearest = lambda vector,value : min(range(len(vector)), key = lambda i: abs(vector[i]-value))
@@ -151,6 +153,38 @@ def read_pt_profile():
             alt.append(float(l.split()[2])*1e3)
             t.append(float(l.split()[3]))
       return p,alt,t
+
+def calculate_water_photolysis():
+      Xrayrate = 0.; EUVrate = 0.; NUVrate = 0.
+      #X-ray (5-100 A), EUV (100-920 A), NUV (920-1940 A)
+      #xray = [i for i in range(5,100)]; euv = [i for i in range(100,920)]; nuv = [i for i in range(920,1940)]
+      water_w_mks = []; water_c_mks = []; repeats = []
+      spectra = fits.getdata('data/photo/GJ581_adapt-const-res-sed.fits',1)
+      spec_w = spectra['WAVELENGTH'] #Angstroms
+      spec_f = spectra['FLUX'] #erg/cm2/s/Angstrom
+      d_GJ581 = 6.3*206265 #GJ581 is 6.3 pc away; convert parsecs to au
+      scaling = d_GJ581**2/a_planet**2 #au/au
+      spec_w_mks = [w*1E-10 for w in spec_w] #convert to m
+      spec_f_mks = [f*scaling*1E-3 for f in spec_f] #convert to J/m2/s/A = 1E-7*1E4
+      #convert to photons/cm2/s
+      spec_f_photon = [f*w/(h*c) for f,w in zip(spec_f_mks,spec_w_mks)] #photons/m2/s/A
+      with open('data/photo/h2o.txt','r') as water: #data is in microns and cm2/molecule
+            wlines = water.readlines()[5:]
+            for line in wlines:
+                  l = line.split()
+                  #convert from A and cm2/molecule to m and m2/molecule while reading in
+                  w = 1.E-6*float(l[0]); water_c_mks.append(1E-4*float(l[1]))
+                  if w in water_w_mks:
+                        w = water_w_mks[-1]*1.0000001
+                  water_w_mks.append(w)
+      f_h2o = interp1d(water_w_mks,water_c_mks,kind='cubic')
+      f_spec = interp1d(spec_w_mks,spec_f_photon,kind='cubic')
+      #water predominantly ionizes shortward of ~90 nm, rather than dissociating; index=0/10/830 at 90/100/920A, 
+      convolve = [f_h2o(l*1E-10)*f_spec(l*1E-10) for l in range(90,1939)] #=m2/molecule * (photon/m2/s/A) * 1 A = /s
+      Xrayrate = sum(convolve[:9])
+      EUVrate = sum(convolve[10:829])
+      NUVrate = sum(convolve[830:])
+      return Xrayrate,EUVrate,NUVrate
 
 def new_func():
       return
