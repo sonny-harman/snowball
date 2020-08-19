@@ -6,6 +6,7 @@ r_Earth = 6.378E6       #m
 m_Sun = 1.9891E30       #kg
 r_Sun = 6.963E8         #m
 l_Sun = 3.839E33        #!!! erg/s !!!
+xuv_Sun = 4.5           #Approximate XUV flux at Earth, erg/cm2/s !!!
 G = 6.674E-11           #m3/kg/s2
 kb = 1.38064E-23        #kg*m2/s2/K
 Na = 6.022E23           #molec/mol

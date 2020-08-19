@@ -11,15 +11,15 @@ from modules import read_thermo,read_pt_profile
 
 #local variable definitions
 H_frac = 1/10
-match_rc = True
+match_rc = False
 
-def atm_est(g,t_eq,envelope_mass_Earths,vmr,mu,diags,plotdir):
+def atm_est(g,t_eq,envelope_mass,vmr,mu,diags,plotdir):
       #Read in thermochemical data for calculating c_p of species
       coeffs = {}
       for species in envelope_species:
             if diags:
                   print('Retrieving thermochemical data for '+species)
-            coeffs[species] = read_thermo(species)
+            coeffs[species] = read_thermo(species,diags)
       #c_pm = [J/K/kg] = c_p / mu = [J/K/mol] / [kg/mol]
       f_c_pm = lambda n,T : ((T<1000)*(sum([coeffs[n][0][i+2]*T**i for i in range(-2,5)])) + (T>=1000 and T<6000)*(sum([coeffs[n][1][i+2]*T**i for i in range(-2,5)])))/(envelope_compm[envelope_species.index(n)]/1000.)
       f_c_pmtot= lambda x,T : sum([f_c_pm(envelope_species[i],T)*x[i] for i in range(len(x))])
@@ -37,8 +37,8 @@ def atm_est(g,t_eq,envelope_mass_Earths,vmr,mu,diags,plotdir):
             if diags:
                   print(f"Matching data in P/T profile at {p_photo:8.2e} bars, where T = {T_temp[-1]:6.1f}K")
       if diags:
-            print(f"{m_above:10.2e} kg, but total envelope is {envelope_mass_Earths:10.2e}; T_eq = {T_temp[-1]:7.2f}K")
-      while m_above < envelope_mass_Earths and T_temp[-1] < 6000.:
+            print(f"Mass above {p_photo/1E5:6.0e} bars = {m_above:10.2e} kg; total envelope is {envelope_mass:10.2e}; T_eq = {T_temp[-1]:7.2f}K")
+      while m_above < envelope_mass and T_temp[-1] < 6000.:
             rp_temp = r_planet*r_Earth-alt_temp[-1]
             mp_temp = m_planet*m_Earth-m_above
             g_temp = f_grav(mp_temp/m_Earth,rp_temp/r_Earth)
@@ -51,7 +51,7 @@ def atm_est(g,t_eq,envelope_mass_Earths,vmr,mu,diags,plotdir):
             T_temp.append(T_temp[-1] + Gamma_temp*H_temp*H_frac)
             p_temp.append(p_temp[-1]*exp(H_frac))
       if diags:
-            print(f"Mass above {p_temp[-1]/1E5:8.2f} bars = {m_above:10.2e} kg, or {m_above/m_Earth:5.2f} Earth masses")
+            print(f"Mass above {p_temp[-1]/1E5:8.2f} bars = {m_above:10.2e} kg, or {m_above/m_Earth:7.4f} Earth masses")
             print(f"g({p_temp[-1]/1E5:8.2f} bar) = {g_temp:6.2f} m/s2, H_atm = {H_temp/1.E3:7.2f} km, delta_r/r_p = {100*alt_temp[-1]/(r_Earth*r_planet):5.2f}% of r_p, T = {T_temp[-1]:7.2f}")
             print(f"Dry adiabatic lapse rate @ {p_temp[-1]/1E5:8.2f} bars = {Gamma_temp*1000:5.2f} K/km")
             fig4,ax4 = plt.subplots()

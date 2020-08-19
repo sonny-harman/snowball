@@ -3,18 +3,26 @@
 #     the underlying physics of the model.
 
 #mubar is the befault mean molecular weight of the atmosphere
-from planet import mubar,a_planet
-from constants import kb,Rconst,m_H,h,c
-from math import log10
+from planet import a_planet,hnu,envelope_species
+from constants import kb,Rconst,m_H,h,c,G,r_Earth
+from math import log10,exp
 from bisect import bisect_left,bisect_right
 from os import linesep,listdir
 from astropy.io import fits
 from scipy.interpolate import interp1d
+from scipy.special import lambertw
 
 #Handy lambdas for finding the nearest,next above, and next below value in a list.
 find_nearest = lambda vector,value : min(range(len(vector)), key = lambda i: abs(vector[i]-value))
 find_above = lambda vector,value : bisect_right(vector,value)
 find_below = lambda vector,value : max(bisect_left(vector,value)-1,0)
+
+#Noack et al. (2016) water/iron/silicate mass-radius relationships
+AN = lambda xfe,xh2o: 7121 - 20.21*xfe + xh2o*(15.23 + 0.239*xfe)
+ANFE = lambda xfe: 7121 - 20.21*xfe + (1-xfe)*(15.23 + 0.239*xfe)
+ANH2O = lambda xh2o: 7121 + xh2o*(15.23)
+CN = lambda xh2o: 0.2645 + 0.00048*xh2o
+f_RpN = lambda mp,xfe,xh2o: 1000*AN(xfe,xh2o)*mp**CN(xh2o)/r_Earth
 
 #lambda function for finding the luminosity (in solar) for a 0.2<M<0.85 M_solar star (Cuntz & Wang, 2018)
 f_lum_CW18 = lambda M : M**(-141.7*M**4. + 232.4*M**3. - 129.1*M**2. + 33.29*M + 0.215)
@@ -28,9 +36,8 @@ def generic_diffusion(minor,major,T):
       bLB15 = 4.8E19*T**0.75 #/m/s, from Luger & Barnes (2015) and Zahnle & Kasting (1986)
       return b
 
-def crossover_mass(T,flux,gravity,X,mass=1.,mu=mubar):
+def crossover_mass(T,flux,gravity,X,mu,mass=1.):
       b=generic_diffusion(mass,mu,T)
-      #crossover_mass(T_eq_t[-1],eflux,grav_t[-1],2.*e_comp_t[-1][0],mass=1.,mu=mu_t[-1])
       #calculate the crossover mass at a given escape flux based on
       #     the temperature T (K), flux (molecules/m2/s), gravity 
       #     (m/s2), mixing ratio of escaping species X, and binary 
@@ -38,6 +45,10 @@ def crossover_mass(T,flux,gravity,X,mass=1.,mu=mubar):
       #     (/m/s).
       cm = mass + kb*T*flux/(b*m_H*gravity*X)
       return cm
+
+def planet_radius(mass,xfe,xh2o):
+      radius = f_RpN(mass,xfe,xh2o)
+      return radius
 
 def read_baraffe(mass):
       #This loads the temperature and luminosity evolution
@@ -125,7 +136,7 @@ def read_hidalgo(stellar_mass):
                   a2 = age; l2 = luminosity
       return a1,a2,l1,l2,f1[0],f1[1]
 
-def read_thermo(name):
+def read_thermo(name,diags):
       coeffs = [[],[]]
       with open('data/thermo.dat','r') as fin:
             lines_after_header = fin.readlines()[10:]
@@ -135,7 +146,8 @@ def read_thermo(name):
             if not l:
                   continue
             elif l[0] == name:
-                  print('Found '+name+': '+l[0])
+                  if diags:
+                        print('Found '+name+': '+l[0])
                   for i in range(2):
                         line1 = lines_after_header[lineno+1+i*2].split()
                         line2 = lines_after_header[lineno+2+i*2].split()
@@ -153,6 +165,23 @@ def read_pt_profile():
             alt.append(float(l.split()[2])*1e3)
             t.append(float(l.split()[3]))
       return p,alt,t
+
+def calc_escape_regime(epsilon,mp,rp,T,mu,VMR,f_c_p):
+      photon_energy_mass = epsilon*rp*hnu/(4*G*m_H)
+      c_p_mean = sum([f_c_p(envelope_species[i],T)*VMR[i] for i in range(len(VMR))]) #J/K/mol
+      gamma = c_p_mean/(c_p_mean - Rconst) #cv = cp - R; gamma = cp/cv; dimensionless
+      cs2 = gamma*(Rconst/(mu/1000.))*T #remember, mu is in amu 
+      alpha_B = 2.6E-19*(T/1E4)**-0.7 #cm3/s to m3/s conversion included; from Owen & Alvarez (2016)
+      H_min = min(rp/3,cs2*(rp)**2./(2*G*mp))
+      r_sound = G*mp/(2*cs2) #m2/s2
+      if rp > r_sound:
+            exit(f"R_sound = {r_sound:10.3e} < R_p = {rp:10.3e}")
+      W_0_term = lambertw((-1*(rp/r_sound)**-4)*exp(3 - 4*r_sound/rp)) #dimensionless
+      #NB: the lack of parentheses in eq. 16, 19, and 20 compared to Cranmer (2004)!!!
+      J_cofac_inv = -4*cs2/(alpha_B*H_min) #seconds
+      J_0_RR_photon = W_0_term*J_cofac_inv #photons/s
+      J_0_RR_energy = W_0_term*J_cofac_inv/(4*photon_energy_mass/mp) #photon/s
+      return photon_energy_mass,J_0_RR_photon,J_0_RR_energy
 
 def calculate_water_photolysis():
       Xrayrate = 0.; EUVrate = 0.; NUVrate = 0.
