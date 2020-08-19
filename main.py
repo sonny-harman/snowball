@@ -246,6 +246,7 @@ for j in range(len(start)):
                   print(f'{age[i]:6.3f}-Gyr critical mass = {mp_crit[-1]/m_Earth:8.3f} Earth masses\n'+
                         f'RR/photon flux threshold = {F_RR2phot[-1]:10.2e} erg/cm2/s\n'+
                         f'RR/energy flux threshold = {F_RR2energy[-1]:10.2e} erg/cm2/s\n')
+            #TODO use XUV thresholds for escape regimes
             if euv_flux[i] > 1E4:
                   #calculate escape rate with radiation-recombination limit from Lopez et al. (2017; MNRAS)
                   mflux = 7.11E4*(euv_flux[i])**0.5*r_p_t[-1]**1.5
@@ -268,7 +269,7 @@ for j in range(len(start)):
                         a=1
                         #print(escaping_species)
                   new_mass = [max(1.E-30,(j==0)*mass_H + e_comp_t[-1][j]*e_f_t[-1]*m_p_t[-1]) for j in range(num_comps)]
-                  #TODO decision tree for new mass addition based on composition, crossover mass
+                  #TODO new mass addition based on composition, crossover mass !!!!!!!!
                   if any([m<0 for m in new_mass]):
                         mass_H = 0.
                         #exit("Mass of one of the reservoirs is negative."+str(new_mass))
