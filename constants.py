@@ -25,7 +25,7 @@ m2cm = 100.             #convert from m to cm
 cm2m = 1/m2cm           #convert from cm to m
 yr2s = 365*24*3600      #convert year to seconds
 s2yr = 1/yr2s           #convert seconds to year
-ergcm2s2Wm2 = 1E-3      #convert from ergs/cm2/s to W/m2
+ergcm2s2Wm2 = 1E-3      #= (1E-7 J/erg)*(100 cm/1 m)**2 - convert from ergs/cm2/s to W/m2
 
 #constant vales
 flux_Earth = l_Sun/(4*pi*(au2m*m2cm)**2.)

@@ -11,7 +11,7 @@ from scipy.interpolate import interp1d,interp2d
 
 #Custom functions and constants
 from modules import read_baraffe,read_thermo,read_hidalgo
-from modules import crossover_mass,planet_radius
+from modules import generic_diffusion,crossover_mass,planet_radius
 from modules import find_nearest,find_above,find_below,f_lum_CW18
 from modules import calculate_water_photolysis,calc_escape_regime
 from atmospheric_mass_estimate import atm_est
@@ -45,7 +45,7 @@ if diags:
 #     generate sinusoidal noise at very early times if not caught and set aside. Terrestrial planets
 #     like the Earth take roughly 0.03-0.1 Gyr to form; giant planets are ~0.001-0.01 Gyr (Helled et al., 2013)
 min_age = max([min(a1),min(a2),0.01]); max_age = min([max(a1),max(a2),14.5])
-age = [a for a in logspace(log10(min_age),log10(max_age),num=2000,endpoint=True)]
+age = [a for a in logspace(log10(min_age),log10(max_age),num=3000,endpoint=True)]
 flum1 = interp1d(a1,l1,kind='cubic'); flum2 = interp1d(a2,l2,kind='cubic') 
 lum1inter = flum1(age); lum2inter = flum2(age)
 f1 = (m2 - m_star)/(m2 - m1); f2 = (m_star - m1)/(m2 - m1)
@@ -137,7 +137,7 @@ f_roche = lambda rp,mp,ms,a : a*au2m*((mp*m_Earth)/(3*ms*m_Sun))**(1/3)/(rp*r_Ea
 f_ktide = lambda ro,rp : (1 - (3/(2*(ro/rp))) + (1/(2*(ro/rp)**3)))                       #dimensionless
 f_T_eq  = lambda f,a : ((f*(1-a))/(4*sigma))**0.25
 f_grav  = lambda mp,rp : (G*mp*m_Earth)/(rp*r_Earth)**2.
-f_mu    = lambda xi,mi : 1/sum(xi[i]/mi[i] for i in range(len(xi))) #requires mass fraction as m
+f_mu    = lambda xi,mi : 1/sum(xi[i]/mi[i] for i in range(len(xi))) #requires mass fraction as m; in amu
 f_vmr   = lambda mi,mu,mass : [mi[i]*mu/mass[i] for i in range(len(mi))] #mass fraction m
 f_mult  = lambda xi,ei : sum(xi[i]*ei[i] for i in range(len(xi))) #generic vector multiplication
 f_H_below=lambda t,mu,g : kb*t/(mu*m_H*g)
@@ -164,7 +164,10 @@ vmr_t = [f_vmr(e_comp_t[-1],mu_t[-1],envelope_compm)]
 epsilon_t = [f_mult(vmr_t[-1],efficiencies)] 
 escape_flux_t = []; mescape_flux_t = []
 crossover_mass_t = []; mass_change = 0.
-F_RR2phot = []; F_RR2energy = []; mp_crit = []
+new_mass = [0 for i in range(len(envelope_species))]
+F_RR2photon = []; F_RR2energy = []; mp_crit = []
+RR_loss = 0.; energy_loss = 0.; photon_loss = 0.; diffusion_loss = 0.
+regime_t = []
 
 if calc_water_photo:
       #calculate how much water can be photolyzed through the star's age, assuming there's only H2O
@@ -184,8 +187,8 @@ if mode == 'forward':
       step = [1]
       print("Solving for initial planet mass from starting mass,radius, and composition in forward mode.")
 elif mode == 'reverse':
-      start = [current_age_ind,current_age_ind+1]
-      end = [-1,len(age)]
+      start = [current_age_ind,current_age_ind]
+      end = [0,len(age)]
       step = [-1,1]
       print("Solving for initial planet mass from present mass, radius, and composition in reverse mode.")
       if e_comp_t[0] == 0.:
@@ -224,58 +227,117 @@ for j in range(len(start)):
             if i > 0:
                   dts = (age[i]-age[i-1])*1E9*yr2s
             else:
-                  dts = age[i]*1E9*yr2s
-            H_below = f_H_below(T_eq_t[-1],mu_t[-1],grav_t[-1])         #meters
-            p_xuvbase = p_xuvcofac*grav_t[-1]                           #Pascal
-            rbase = r_p_t[-1]*r_Earth + H_below*log(p_photo/p_xuvbase)  #meters
-            #if scale_efficiency: #Approximate the mass loss efficiency of Bolmont et al. (2017), Fig. 2
+                  dts = (age[1]-age[0])*1E9*yr2s
+            H_below = f_H_below(T_eq_t[-1],mu_t[-1],grav_t[-1])         #m
+            p_xuvbase = p_xuvcofac*grav_t[-1]                           #Pa
+            rbase = r_p_t[-1]*r_Earth + H_below*log(p_photo/p_xuvbase)  #m
+            r_p_m = r_p_t[-1]*r_Earth                                   #m
+            m_p_kg = m_p_t[-1]*m_Earth                                  #kg
+            delta_mass = 0.
+            #TODO Approximate the flux-dependent mass loss efficiency of Bolmont et al. (2017), Fig. 2
             #Koskinen et al. (2014) efficiencies for ultra-HJs are 0.085@0.2 au; 0.22@0.1 au; 0.44@<0.1 au
+            #if scale_efficiency: 
             #
             #Start by determining which regime the escape occupies by calculating J_0 from eqns. 18-20 in Owen & Alvarez (2016)
-            r_p_m = r_p_t[-1]*r_Earth; m_p_kg = m_p_t[-1]*m_Earth #need the planet radius in m and mass in kg for several terms
-            photons2ergcm2s = hnu/(4*pi*r_p_m**2)/ergcm2s2Wm2 #conversion factor for photon/s to erg/cm2/s
             #Returning the threshold planetary mass for the energy- to photon-limited regimes (Mp > actual mass means photon-limited),
-            #     and the flux (in erg/cm2/s) needed to hop between the different regimes.
-            Mp_p2e, flux1, flux2 = calc_escape_regime(epsilon_t[-1],m_p_kg,r_p_m,T_eq_t[-1],mu_t[-1],vmr_t[-1],f_c_p)
-            flux1 = flux1#*photons2ergcm2s; 
-            flux2 = flux2#*photons2ergcm2s #convert both fluxes from photon/s to erg/cm2/s
-            mp_crit.append(Mp_p2e/m_Earth); F_RR2phot.append(flux1.real); F_RR2energy.append(flux2.real)
-            if i == current_age_ind:
-                  print(current_age_ind,age[current_age_ind],start[j],end[j])
-                  print(epsilon_t[-1],m_p_kg,r_p_m,T_eq_t[-1],mu_t[-1],vmr_t[-1])
-                  print(f'{age[i]:6.3f}-Gyr critical mass = {mp_crit[-1]/m_Earth:8.3f} Earth masses\n'+
-                        f'RR/photon flux threshold = {F_RR2phot[-1]:10.2e} erg/cm2/s\n'+
+            #     and the flux (in photon/m2/s) needed to hop between the different regimes.
+            Mp_p2e, flux1, flux2 = calc_escape_regime(epsilon_t[-1],m_p_kg,r_p_m,5500,mu_t[-1],vmr_t[-1],f_c_p)
+            #convert both fluxes from photon/m2/s to erg/cm2/s
+            #TODO These fluxes still don't seem right.
+            flux1 = flux1*hnu/ergcm2s2Wm2
+            flux2 = flux2*hnu/ergcm2s2Wm2
+            mp_crit.append(Mp_p2e/m_Earth)
+            F_RR2photon.append(flux1.real)
+            F_RR2energy.append(flux2.real)
+            if diags and i == current_age_ind:
+            #      print(epsilon_t[-1],m_p_kg,r_p_m,T_eq_t[-1],mu_t[-1],vmr_t[-1])
+                  print(f'{age[i]:6.3f}-Gyr critical mass = {mp_crit[-1]:8.3f} Earth masses\n'+
+                        f'RR/photon flux threshold = {F_RR2photon[-1]:10.2e} erg/cm2/s\n'+
                         f'RR/energy flux threshold = {F_RR2energy[-1]:10.2e} erg/cm2/s\n')
-            #TODO use XUV thresholds for escape regimes
-            if euv_flux[i] > 1E4:
-                  #calculate escape rate with radiation-recombination limit from Lopez et al. (2017; MNRAS)
-                  mflux = 7.11E4*(euv_flux[i])**0.5*r_p_t[-1]**1.5
-            else:
-                  #calculate energy-limited escape rate following Lopez et al. (2017; MNRAS)
-                  mflux = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*rbase**3./(G*m_p_kg*ktide_t[-1])
-            eflux = mflux/(m_H*4*pi*r_p_m**2.) #assume the escape flux is H to start, then iterate through comp_mass list
-            ref_H_flux = epsilon_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H)
+            #include diffusion limit
+            ref_H_flux = epsilon_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H) #H/m2/s
             Htot = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
-            crossover_mass_t.append(crossover_mass(T_eq_t[-1],eflux,grav_t[-1],Htot,mu_t[-1]))
+            cm,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
+            crossover_mass_t.append(cm)
+            #Select escape regime based on XUV threshold fluxes
+            if m_p_t[-1] < mp_crit[-1] and xuv_flux[i] < F_RR2photon[-1]:
+                  #Photon-limited escape rate, per Owen & Alvarez (2016)
+                  mflux = pi*r_p_m**2*m_H*xuv_flux[i]*ergcm2s2Wm2/hnu #convert from W/m2 to photons/m2/s; kg/s
+                  regime_t.append(0)
+                  photon_loss = photon_loss + mflux*dts/m_Earth
+            elif xuv_flux[i] > F_RR2energy[-1]:
+                  #calculate escape rate with radiation-recombination limit from Murray-Clay et al. (2009, ApJ) as 
+                  #     normalized by Luger et al. (2015, Astrobiology)
+                  mflux = 7.11E4*(xuv_flux[i])**0.5*r_p_t[-1]**1.5 #kg/s
+                  regime_t.append(2)
+                  RR_loss = RR_loss + mflux*dts/m_Earth
+            elif Htot > 0.1:
+                  #calculate energy-limited escape rate following Luger & Barnes (2015)
+                  mflux = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
+                  regime_t.append(1)
+                  energy_loss = energy_loss + mflux*dts/m_Earth
+            else:
+                  mflux = diff_limit*4*pi*r_p_m**2/m_H
+                  regime_t.append(4)
+                  diffusion_loss = diffusion_loss + mflux*dts/m_Earth
+            eflux = mflux/(m_H*4*pi*r_p_m**2.) #H atoms/m2/s; assume the escape flux is H to start, then used modified drag-off below
             mescape_flux_t.append(mflux)
             escape_flux_t.append(eflux)
+            #Convert escape flux into planet mass and inventory modifications
+            #Include only species that are below the crossover mass and have non-zero inventories
+            escaping_species = [envelope_compm.index(m) for m in envelope_compm[1:] if crossover_mass_t[-1]>m and e_comp_t[-1][envelope_compm.index(m)]>0.] 
+            new_mass = [e_f_t[-1]*m_p_kg*e_comp_t[-1][s] for s in range(len(envelope_species))]
+            #if i > 0:
+            #      older_mass = [e_f_t[-2]*m_p_kg*e_comp_t[-1][s] for s in range(len(envelope_species))]
+            #      if any([n>o for o,n in zip(older_mass,new_mass)]):
+            #            print('uh oh',i,older_mass,new_mass)
+            old_mass = new_mass #for differencing later, once all the escape logic is carried out
+            if any(escaping_species):
+                  escaping_MMRs = [e_comp_t[-1][s] for s in escaping_species]
+                  escaping_MMRs.insert(0,e_comp_t[-1][0])
+                  escaping_VMRs = [vmr_t[-1][s] for s in escaping_species]
+                  escaping_VMRs.insert(0,Htot)
+                  escaping_mus = [envelope_compm[s] for s in escaping_species]
+                  escaping_mus.insert(0,1.)
+                  mu_heavy = f_mu(escaping_MMRs[1:],escaping_mus[1:])*sum(escaping_MMRs[1:])
+                  vmr_heavy = sum([vmr_t[-1][s] for s in escaping_species])
+                  mu_escaping = f_mu(escaping_MMRs,escaping_mus)*sum(escaping_MMRs)
+                  b_H = generic_diffusion(1.,mu_t[-1],T_eq_t[-1])
+                  phi_prime = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
+                  m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
+                  crossover_mass_t[-1] = m_c_prime
+                  escaping_species.insert(0,0) #need to include H now in escape
+                  F_H_prime = eflux*Htot*(m_c_prime - 1)/sum([escaping_mus[k]*escaping_VMRs[k]*(m_c_prime - escaping_mus[k]) for k in range(len(escaping_species))])
+                  for s in escaping_species:
+                        k = escaping_species.index(s)
+                        del_m_comp = 4*pi*r_p_m**2*step[j]*dts*envelope_compm[s]*m_H*F_H_prime*escaping_VMRs[k]*(m_c_prime - escaping_mus[k])/(Htot*(m_c_prime - 1))
+                        new_mass[s] -= del_m_comp
+                        delta_mass += del_m_comp
+            #TODO new mass addition based on composition, crossover mass !!!!!!!!
+            else:
+                  new_mass[0] -= mflux*step[j]*dts #kg
+                  delta_mass += mflux*step[j]*dts #kg
+            #If a mass reservoir that's supposed to be dragged off goes negative, that extra mass is lost as H
+            new_mass[0] = new_mass[0] - abs(sum([m for m in new_mass if m < 0]))
+            if new_mass[0]<=0 and new_mass[envelope_species.index('H2O')] > 0: #H2 exhausted; accumulate O from water
+                  ind_H2O = envelope_species.index('H2O')
+                  delta_O = abs(new_mass[0])*envelope_compm[ind_H2O]/envelope_compm[envelope_species.index('H2')]
+                  new_mass[ind_H2O] -= delta_O
+                  new_mass[envelope_species.index('O')] += delta_O*(16/18)
+                  #TODO finish this implementation - small impact, since O accumulates and then escapes in next step?
+                  #new_F_H = abs(new_mass[0])/(m_H*dts*4*pi*r_p_m**2) #convert H lost from water into H flux to see if it drags off O
+                  #if crossover_mass(T_eq_t[-1],new_F_H,grav_t[-1],Htot,mu_t[-1]) > 16:
+                  #      F_H_prime = eflux*(2/3)*vmr_t[-1][ind_H2O]*(m_c_prime - 1)/(envelope_compm[ind_H2O]*vmr_t[-1][ind_H2O]*(m_c_prime - envelope_compm[ind_H2O]))
+                  new_mass[0] = 0.
+            new_mass = [max(0,m) for m in new_mass] #at the end, if H2 is gone and water is depleted, those reservoirs should be zero
+            #delta_mass = -1*sum([old-new for old,new in zip(old_mass,new_mass)])
+            new_e_frac = [m/max(1.E-90,sum(new_mass)) for m in new_mass]
+            mass_change = mass_change+abs(delta_mass)/m_Earth
             
             #update variables
             if i < len(age)-1:
                   #Append new values as we move backwards in time, then 'flip' variables
-                  mass_H = -1*step[j]*mflux*dts/m_Earth #Earth masses
-                  escaping_species = [envelope_compm.index(m) for m in envelope_compm[1:] if crossover_mass_t[-1]>m] 
-                  if any(escaping_species):
-                        a=1
-                        #print(escaping_species)
-                  new_mass = [max(1.E-30,(j==0)*mass_H + e_comp_t[-1][j]*e_f_t[-1]*m_p_t[-1]) for j in range(num_comps)]
-                  #TODO new mass addition based on composition, crossover mass !!!!!!!!
-                  if any([m<0 for m in new_mass]):
-                        mass_H = 0.
-                        #exit("Mass of one of the reservoirs is negative."+str(new_mass))
-                  new_e_frac = [m/sum(new_mass) for m in new_mass]
-                  mass_change = mass_change-mass_H
-                  m_p_t.append(m_p_t[-1]+mass_H)
+                  m_p_t.append(m_p_t[-1]-delta_mass/m_Earth)
                   c_f_t.append(core_frac*m_planet/m_p_t[-1])
                   e_f_t.append(1.-c_f_t[-1])
                   e_comp_t.append(new_e_frac)
@@ -295,32 +357,38 @@ for j in range(len(start)):
             r_p_t.reverse(); m_p_t.reverse()
             mu_t.reverse(); T_eq_t.reverse()
             roche_t.reverse(); ktide_t.reverse()
+            mp_crit.reverse(); F_RR2photon.reverse(); F_RR2energy.reverse()
+            regime_t.reverse()
             epsilon_t.reverse(); crossover_mass_t.reverse()
             mescape_flux_t.reverse()
             escape_flux_t.reverse()
 
-
-e_cmp_t = [[x*a*b for x in e_comp_t[e_f_t.index(a)]] for a,b in zip(e_f_t,m_p_t)]
-
 if diags:
+      print(f"Present-day m_p = {m_p_t[current_age_ind]:6.4f} m_Earth; r_p = {r_p_t[current_age_ind]:6.4f} r_Earth")
+      print(f"Photon-limited mass loss = {photon_loss:10.4e}; RR-limited loss = {RR_loss:10.4e}; energy-limited loss = {energy_loss:10.4e}; diffusion-limited loss = {diffusion_loss:10.4e} [m_Earth]")
       print(f"{m_p_t[0]:6.4f}-->{m_p_t[-1]:6.4f} m_Earth; total mass change = {mass_change:6.4f} m_Earth")
+      print(f"{r_p_t[0]:6.4f}-->{r_p_t[-1]:6.4f} r_Earth over this time, or {100*(r_p_t[-1]-r_p_t[1])/r_p_t[0]:6.4f}%")
       print(f"Present-day escape rate = {mescape_flux_t[age.index(current_age)]:8.2e} kg/s")
       print(f"                        = {escape_flux_t[age.index(current_age)]:8.2e} molec/m2/s")
       print(f"                        = {escape_flux_t[age.index(current_age)]/1e4:8.2e} molec/cm2/s")
-
+      print(f"\n  M_O2 gained = {e_f_t[current_age_ind]*m_p_t[current_age_ind]*e_comp_t[current_age_ind][envelope_species.index('O')]} Earth masses at current age")
+      if mode == 'reverse':
+            print(f"Initial envelope fraction = {e_f_t[0]:10.5e} and composition = {e_comp_t[0]}; initial R = {r_p_t[0]:8.6f} and M = {m_p_t[0]:8.6f}")
+      else:
+            print(f"Presnt-day envelope fraction = {e_f_t[current_age_ind]:10.5e} and composition = {e_comp_t[current_age_ind]}; initial R = {r_p_t[current_age_ind]:8.6f} and M = {m_p_t[current_age_ind]:8.6f}")
 if plots:
       fig1,ax1 = plt.subplots()
       if diags:
             ax1.plot(a1,l1,'r--') #lower stellar mass for luminosity interpolation
             ax1.plot(a2,l2,'r--') #upper stellar mass for luminosity interpolation
-            ax1.plot([1.1*max(age),1.1*max(age)],[0.98*f_lum_CW18(m_star),1.02*f_lum_CW18(m_star)],color='gray')
+#            ax1.plot([1.1*max(age),1.1*max(age)],[0.98*f_lum_CW18(m_star),1.02*f_lum_CW18(m_star)],color='gray')
       ax1.plot(age,luminosity,'k')
       #include saturation timescale
       ax1.plot(tau_sat,luminosity[age.index(tau_sat)],'bo')
-      ax1.text(tau_sat,1.1*luminosity[age.index(tau_sat)],r'${\tau}_{sat}$',color='b',ha='left')
+      ax1.text(tau_sat,1.1*luminosity[age.index(tau_sat)],r'${\tau}_{sat}$',color='b',ha='right')
       #include the notional start of the main sequence lifetime for star
       ax1.plot(ms_start,luminosity[age.index(ms_start)],'ro',markerfacecolor='None')
-      ax1.text(ms_start,1.1*luminosity[age.index(ms_start)],'MS',color='r',ha='right')
+      ax1.text(ms_start,1.1*luminosity[age.index(ms_start)],'MS',color='r',ha='left')
       #include the notional age of the system
       ax1.plot(current_age,luminosity[current_age_ind],'x',color='gray')
       ax1.text(current_age,1.1*luminosity[current_age_ind],'Today',color='gray',ha='center')
@@ -328,63 +396,105 @@ if plots:
       ax1.set_xlabel("Age [Gyr]"); ax1.set_ylabel("Luminosity [L/L$_{\odot}$]")
       ax1.set_xlim(0.9*min(age),1.2*max(age))
       ax1.set_ylim(0.9*min(l1),1.2*max(luminosity))
-      ax1.set_title(stellar_tracks+" et al. luminosity evolution for "+str(match)+" M$_{\odot}$ star\n"
-            +"Luminosities for bookend masses(r--) and interpolation(k)")
+      ax1.set_yticks([0.01,0.1])
+      ax1.set_yticklabels(['0.01','0.1'])
+#      ax1.set_title(stellar_tracks+" et al. luminosity evolution for "+str(match)+" M$_{\odot}$ star\n"
+#            +"Luminosities for bookend masses(r--) and interpolation(k)")
+      fig1.tight_layout()
       plt.show()
       if save_plots:
             fig1.savefig(plotdir+'luminosity_MS_tau_i_vs_time.png',dpi=200)
 
 if plots:
-      fig2,ax2 = plt.subplots()
-      ax2.plot(age,m_p_t,age,[i*j for i,j in zip(m_p_t,e_f_t)],age,[i*j for i,j in zip(m_p_t,c_f_t)])
-      ax2.set_xscale('log');ax2.set_yscale('log')
-      ax2.set_xlabel("Age [Gyr]"); ax2.set_ylabel(r"Planet Mass [$M_{\oplus}$]")
-      ax2.plot(current_age,m_p_t[current_age_ind],'x',color='gray')
-      ax2.text(current_age,1.02*m_p_t[current_age_ind],'Today',color='gray',ha='center')
-      ax2.text(age[-1],m_p_t[-1]*e_f_t[-1],r"M$_{atm}$")
-      ax2.text(age[-1],m_p_t[-1]*c_f_t[-1],r"M$_{core}$")
+      fig2 = plt.figure()
+      ax2 = plt.subplot(211)
+      ax2.plot(age,m_p_t,'k',label=r'Planet Mass')
+      ax2.text(age[0],m_p_t[0],'Planet',c='k',ha='left',va='top')
+      ax2.plot(age,[i*j for i,j in zip(m_p_t,e_f_t)],'b',label='Envelope Mass')
+      ax2.text(age[0],m_p_t[0]*e_f_t[0],'Envelope',c='b',ha='left',va='bottom')
+      ax2.plot(age,[i*j for i,j in zip(m_p_t,c_f_t)],'r',label='Core Mass')
+      ax2.text(age[0],m_p_t[0]*c_f_t[0],'Core',c='r',ha='left',va='top')
+      ymin, ymax = ax2.get_ylim()
+      ax2.plot([current_age,current_age],[0.,ymax],':',color='gray')
+      ax2.set_xlim(0.9*min(age),1.2*max(age))
+      ax2.set_ylim([0.,ymax])
+      ax2.set_xscale('log')
+      ax2.set_ylabel(r"Mass [$M_{\oplus}$]")
+      plt.setp(ax2.get_xticklabels(),visible=False)
+#      ax2.text(current_age,0.85*m_p_t[current_age_ind],'Today',color='gray',ha='center')
+      ax2b = plt.subplot(212,sharex=ax2) #ax2.twinx()
+      for i in range(len(envelope_species)):
+            e_comp_t_spec = [e_comp_t[j][i] for j in range(len(age))] #vmr_t[j][i] for j in range(len(age))]
+            #ax2b.plot(age,e_comp_t_spec,label=envelope_species[i])
+            ax2b.plot(age,[a*b*c for a,b,c in zip(m_p_t,e_f_t,e_comp_t_spec)],'--',label=envelope_species[i])
+      #ax2b.set_ylabel(r'Envelope composition [VMR]')
+      ax2b.set_ylabel(r'Envelope composition [$M_{\oplus}$]')
+      ax2b.set_xlabel('Age [Gyr]')
+      ymin, ymax = ax2b.get_ylim()
+      ax2b.plot([current_age,current_age],[ymin,ymax],':',color='gray')
+      plt.legend(loc='center left')
+      fig2.tight_layout()
       plt.show()
       if save_plots:
             fig2.savefig(plotdir+'Planet_mass_vs_time.png',dpi=200)
 
 if plots:
       fig3,ax3 = plt.subplots()
-      ax3.plot(age,saturation,'k--')
-      ax3.plot(age,xray_scale,'r')
-      ax3.plot(age,euv_scale,'b')
+      ax3.plot(age,saturation,'k--',label='XUV')
+      ax3.plot(age,xray_scale,'r',label='X-ray')
+      ax3.plot(age,euv_scale,'b',label='EUV')
       ax3.set_xscale('log'); ax3.set_yscale('log')
-      ax3.set_xlabel("Age [Gyr]"); ax3.set_ylabel(r"X-ray(r)/EUV(b)/XUV(k--) sat. [L$_{\lambda}$/L$_{bol}$]")
-      ax3.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution for "+str(match)+" M$_{\odot}$ star")
+      ax3.set_xlabel("Age [Gyr]"); ax3.set_ylabel(r"L$_{\lambda}$/L$_{bol}$")
+#      ax3.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution for "+str(match)+" M$_{\odot}$ star")
+      ax3.set_xlim(0.9*min(age),1.2*max(age))
+      plt.legend(loc='best')
+      fig3.tight_layout()
       plt.show()
       if save_plots:
             fig3.savefig(plotdir+'UV_scaling_vs_time.png',dpi=200)
 
 if plots:
       fig5,ax5 = plt.subplots()
-      ax5.plot(age,xuv_flux,'k--')
-      ax5.plot(age,xray_flux,'r')
-      ax5b = ax5.twinx()
-      ax5b.loglog(age,xuv_flux_Earth,'gray')
-      ax5b.set_ylabel(r"XUV flux (gray) [F/F$_{\oplus}$]")
-      ax5.plot(age,euv_flux,'b')
-      ax5.plot([min(age),max(age)],[1e4,1e4],color='gray',linestyle='-.')
-      print(f"XUV flux drops below 1E4 erg/cm2/s at {age[find_nearest(xuv_flux,1E4)]} Gyr.")
+      ax5.plot(age,xuv_flux,'k--',label='XUV')
+      ax5.plot(age,xray_flux,'r',label='X-ray')
+      ax5.plot(age,euv_flux,'b',label='EUV')
+      plt.legend(loc='best')
       ax5.set_xscale('log'); ax5.set_yscale('log')
-      ax5.set_xlabel("Age [Gyr]"); ax5.set_ylabel(r"X-ray(r)/EUV(b)/XUV(k--) flux [ergs/cm2/s]")
-      ax5.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution "+str(match)+" M$_{\odot}$ star")
+      ymin, ymax = ax5.get_ylim()
+      ax5.set_xlim(0.9*min(age),1.2*max(age))
+      ax5b = ax5.twinx()
+      ax5b.loglog(age,xuv_flux_Earth,'None')
+      ax5b.set_ylabel(r"XUV flux [F/F$_{\oplus}$]")
+#      ax5.plot([min(age),max(age)],[1e4,1e4],color='gray',linestyle='-.')
+#      print(f"XUV flux drops below 1E4 erg/cm2/s at {age[find_nearest(xuv_flux,1E4)]} Gyr.")
+      ax5.set_xlabel("Age [Gyr]"); ax5.set_ylabel(r"Flux [ergs/cm2/s]")
+      ax5b.set_ylim(ymin/xuv_Sun, ymax/xuv_Sun)
+#      ax5.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution "+str(match)+" M$_{\odot}$ star")
+      fig5.tight_layout()
       plt.show()
       if save_plots:
             fig5.savefig(plotdir+'UV_flux_vs_time.png',dpi=200)
 
 if plots:
       fig6,ax6 = plt.subplots()
-      ax6.plot(age,crossover_mass_t)
+      ax6.plot(age,crossover_mass_t,'b-')
       ax6.set_xscale("log"); ax6.set_yscale('log')
-      ax6.set_xlabel("Age [Gyr]"); ax6.set_ylabel('Crossover mass [amu]')
+      ax6.set_xlabel("Age [Gyr]"); ax6.set_ylabel('Crossover mass [amu] (b)')
+      ax6.set_xlim(0.9*min(age),1.2*max(age))
+      ax6b = ax6.twinx()
+      ls = [':','-','--','-.']
+      regime_labels = ['Photon-limited','Energy-limited','RR-limited','Diffusion-limited']
+      for i in range(4):
+            ax6b.plot([age[k] for k in range(len(age)) if regime_t[k] == i],[mescape_flux_t[k] for k in range(len(age)) if regime_t[k] == i],ls=ls[i],color='k',label=regime_labels[k])
+      ax6b.set_yscale('log')
+      ax6b.set_ylabel('Escape flux [kg/s] (k)')
+      #ax6b.plot(age,regime_t)
+      plt.legend(loc='best')
       if min(crossover_mass_t) < 18:
             crit_mass = find_nearest(crossover_mass_t,18.)
             ax6.plot(age[crit_mass-1:crit_mass+1],crossover_mass_t[crit_mass-1:crit_mass+1],'k-')
             ax6.text(age[crit_mass],1.1*crossover_mass_t[crit_mass],"Water")
+      fig6.tight_layout()
       plt.show()
       if save_plots:
             fig6.savefig(plotdir+'crossover_mass_vs_time.png',dpi=200)
@@ -392,8 +502,12 @@ if plots:
 if plots:
       fig7,ax7 = plt.subplots(2,1,sharex=True)
       ax7[0].semilogx(age,mp_crit)
-      ax7[1].loglog(age,F_RR2phot,age,F_RR2energy)
+      ax7[1].loglog(age,F_RR2photon,age,F_RR2energy)
       ax7[0].set_xlabel('Age [Gyr]')
       ax7[0].set_ylabel(r'Critical mass [M$_{\oplus}$]')
-      ax7[1].set_ylabel(r'Flux threshold [erg/cm^2/s]')
+      ax7[1].set_ylabel(r'Flux threshold [erg/cm$^2$/s]')
+      ax7[0].set_xlim(0.9*min(age),1.2*max(age))
+      fig7.tight_layout()
       plt.show()
+      if save_plots:
+            fig7.savefig(plotdir+'flux_regime_boundaries_vs_time.png',dpi=200)

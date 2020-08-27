@@ -44,7 +44,8 @@ def crossover_mass(T,flux,gravity,X,mu,mass=1.):
       #     diffusion parameterizations given by generic_diffusion 
       #     (/m/s).
       cm = mass + kb*T*flux/(b*m_H*gravity*X)
-      return cm
+      diff_limit = b*gravity*X*m_H*(mu-mass)/(kb*T)
+      return cm,diff_limit
 
 def planet_radius(mass,xfe,xh2o):
       radius = f_RpN(mass,xfe,xh2o)
@@ -169,18 +170,18 @@ def read_pt_profile():
 def calc_escape_regime(epsilon,mp,rp,T,mu,VMR,f_c_p):
       photon_energy_mass = epsilon*rp*hnu/(4*G*m_H)
       c_p_mean = sum([f_c_p(envelope_species[i],T)*VMR[i] for i in range(len(VMR))]) #J/K/mol
-      gamma = c_p_mean/(c_p_mean - Rconst) #cv = cp - R; gamma = cp/cv; dimensionless
-      cs2 = gamma*(Rconst/(mu/1000.))*T #remember, mu is in amu 
-      alpha_B = 2.6E-19*(T/1E4)**-0.7 #cm3/s to m3/s conversion included; from Owen & Alvarez (2016)
-      H_min = min(rp/3,cs2*(rp)**2./(2*G*mp))
-      r_sound = G*mp/(2*cs2) #m2/s2
+      gamma = c_p_mean/(c_p_mean - Rconst)      #cv = cp - R; gamma = cp/cv; dimensionless
+      cs2 = gamma*(Rconst/(mu/1000.))*T         #m2/s2; remember, mu is in g/mol 
+      alpha_B = 2.6E-19*(T/1E4)**-0.7           #cm3/s to m3/s conversion included; from Owen & Alvarez (2016)
+      H_min = min(rp/3,cs2*(rp)**2./(2*G*mp))   #m
+      r_sound = G*mp/(2*cs2)                    #m
       if rp > r_sound:
             exit(f"R_sound = {r_sound:10.3e} < R_p = {rp:10.3e}")
       W_0_term = lambertw((-1*(rp/r_sound)**-4)*exp(3 - 4*r_sound/rp)) #dimensionless
       #NB: the lack of parentheses in eq. 16, 19, and 20 compared to Cranmer (2004)!!!
-      J_cofac_inv = -4*cs2/(alpha_B*H_min) #seconds
-      J_0_RR_photon = W_0_term*J_cofac_inv #photons/s
-      J_0_RR_energy = W_0_term*J_cofac_inv/(4*photon_energy_mass/mp) #photon/s
+      J_cofac_inv = -4*cs2/(alpha_B*H_min)      #seconds
+      J_0_RR_photon = W_0_term*J_cofac_inv      #photons/m2/s
+      J_0_RR_energy = W_0_term*J_cofac_inv/(4*photon_energy_mass/mp) #photon/m2/s
       return photon_energy_mass,J_0_RR_photon,J_0_RR_energy
 
 def calculate_water_photolysis():
@@ -202,10 +203,13 @@ def calculate_water_photolysis():
             for line in wlines:
                   l = line.split()
                   #convert from A and cm2/molecule to m and m2/molecule while reading in
-                  w = 1.E-6*float(l[0]); water_c_mks.append(1E-4*float(l[1]))
+                  w = 1.E-6*float(l[0]); c = 1E-4*float(l[1])
                   if w in water_w_mks:
-                        w = water_w_mks[-1]*1.0000001
-                  water_w_mks.append(w)
+                        i = water_w_mks.index(w)
+                        c = 0.5*(water_c_mks[i] + c)
+                  else:
+                        water_c_mks.append(c)
+                        water_w_mks.append(w)
       f_h2o = interp1d(water_w_mks,water_c_mks,kind='cubic')
       f_spec = interp1d(spec_w_mks,spec_f_photon,kind='cubic')
       #water predominantly ionizes shortward of ~90 nm, rather than dissociating; index=0/10/830 at 90/100/920A, 
