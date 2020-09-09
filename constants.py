@@ -17,6 +17,7 @@ sigma = 5.67E-8         #W/m2/K4
 N_A = 6.022E23          #molecules/mole
 
 m_H = 1.67E-27          #kg
+m_ocean = 1.4E21        #kg - equivalent mass of 1 Earth ocean
 #ev = 1.60218e-19      #1 ev = 1.60218e-19 Joule
 
 #conversion factors

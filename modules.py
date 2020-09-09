@@ -36,15 +36,15 @@ def generic_diffusion(minor,major,T):
       bLB15 = 4.8E19*T**0.75 #/m/s, from Luger & Barnes (2015) and Zahnle & Kasting (1986)
       return b
 
-def crossover_mass(T,flux,gravity,X,mu,mass=1.):
-      b=generic_diffusion(mass,mu,T)
+def crossover_mass(T,flux,gravity,X,mu_background,mass=1.):
+      b=generic_diffusion(mass,mu_background,T)
       #calculate the crossover mass at a given escape flux based on
       #     the temperature T (K), flux (molecules/m2/s), gravity 
       #     (m/s2), mixing ratio of escaping species X, and binary 
       #     diffusion parameterizations given by generic_diffusion 
       #     (/m/s).
       cm = mass + kb*T*flux/(b*m_H*gravity*X)
-      diff_limit = b*gravity*X*m_H*(mu-mass)/(kb*T)
+      diff_limit = b*gravity*X*m_H*(mu_background-mass)/(kb*T*(1+X)) #add'l 1/(1+f_i) term from Hunten (1973b)
       return cm,diff_limit
 
 def planet_radius(mass,xfe,xh2o):
@@ -167,17 +167,17 @@ def read_pt_profile():
             t.append(float(l.split()[3]))
       return p,alt,t
 
-def calc_escape_regime(epsilon,mp,rp,T,mu,VMR,f_c_p):
+def calc_escape_regime(epsilon,mp,rp,T,mu):
       photon_energy_mass = epsilon*rp*hnu/(4*G*m_H)
-      c_p_mean = sum([f_c_p(envelope_species[i],T)*VMR[i] for i in range(len(VMR))]) #J/K/mol
-      gamma = c_p_mean/(c_p_mean - Rconst)      #cv = cp - R; gamma = cp/cv; dimensionless
-      cs2 = gamma*(Rconst/(mu/1000.))*T         #m2/s2; remember, mu is in g/mol 
+      cs2 = kb*T/(m_H*mu) #alternate sound speed calculation
       alpha_B = 2.6E-19*(T/1E4)**-0.7           #cm3/s to m3/s conversion included; from Owen & Alvarez (2016)
       H_min = min(rp/3,cs2*(rp)**2./(2*G*mp))   #m
       r_sound = G*mp/(2*cs2)                    #m
+      #W_0_term = lambertw((-1*(rp/r_sound)**-4)*exp(3 - 4*r_sound/rp)) #dimensionless
       if rp > r_sound:
-            exit(f"R_sound = {r_sound:10.3e} < R_p = {rp:10.3e}")
-      W_0_term = lambertw((-1*(rp/r_sound)**-4)*exp(3 - 4*r_sound/rp)) #dimensionless
+            W_0_term = lambertw((-1*(rp/r_sound)**-4)*exp(3 - 4*r_sound/rp)) #dimensionless
+      else:
+            W_0_term = -1 #Owen & Alvarez (2016), page 4
       #NB: the lack of parentheses in eq. 16, 19, and 20 compared to Cranmer (2004)!!!
       J_cofac_inv = -4*cs2/(alpha_B*H_min)      #seconds
       J_0_RR_photon = W_0_term*J_cofac_inv      #photons/m2/s
