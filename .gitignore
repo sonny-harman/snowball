@@ -1,3 +1,8 @@
 #### Outputs
 /saved_plots/
+
+#### Python detritus 
 __pycache__
+
+#### System-specific noise
+.DS_Store
