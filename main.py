@@ -27,7 +27,7 @@ from planet import m_star,age_star,l_star,d_star,J_mag_star
 from planet import stellar_tracks,norm_lum,do_euv_sat,do_emp_sat,do_emp_scale
 from planet import xuv_threshold,p_photo,p_xuvcofac,mode,efficiencies,variable_efficiency,hnu
 
-plots = True
+plots = False
 estimate_atmosphere = False
 calc_water_photo = False
 diags = True
@@ -156,7 +156,12 @@ f_c_p = lambda n,T : ((T<1000)*(sum([coeffs[n][0][i+2]*T**i for i in range(-2,5)
 c_f_t = [core_frac]; c_d_t = [core_den]
 e_f_t = [envelope_frac]; e_comp_t = [envelope_comp]; num_comps = len(envelope_comp)
 m_p_t = [m_planet]
-r_p_t = [planet_radius(m_p_t[-1],0,100)] #[r_planet] Can't use observed radius in combination with M/R relationship below
+if m_p_t[-1] > 3.:
+      #Matching 6.4 M_E and 1.563 R_E roughly with Fe core
+      r_p_t = [planet_radius(m_p_t[-1],51,0)] #larger mass-radius planet starting points are likely to be silicate-rich; need to be aware of envelope_frac
+else:
+      #Matching 1.9 M_E and 1.6 R_E as pure H2O
+      r_p_t = [planet_radius(m_p_t[-1],0,100)]
 grav_t = [f_grav(m_planet,r_planet)] #Gravity [m/s2] at the 20 mbar level assumed to be for m_planet @ r_planet
 roche_t = [f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet)]
 ktide_t = [f_ktide(roche_t[-1],r_p_t[-1])]
@@ -336,7 +341,9 @@ for j in range(len(start)):
                   ind_H2O = envelope_species.index('H2O')
                   delta_O = abs(new_mass[0])*envelope_compm[ind_H2O]/envelope_compm[envelope_species.index('H2')]
                   new_mass[ind_H2O] -= delta_O
-                  new_mass[envelope_species.index('O')] += delta_O*(16/18)
+                  if crossover_mass_t[-1] < envelope_compm[envelope_species.index('H2O')]:
+                        #Only add O mass if H2O isn't escaping as well
+                        new_mass[envelope_species.index('O')] += delta_O*(16/18)
                   #TODO finish this implementation - small impact, since O accumulates and then escapes in next step?
                   #new_F_H = abs(new_mass[0])/(m_H*dts*4*pi*r_p_m**2) #convert H lost from water into H flux to see if it drags off O
                   #if crossover_mass(T_eq_t[-1],new_F_H,grav_t[-1],Htot,mu_t[-1]) > 16:
@@ -358,7 +365,12 @@ for j in range(len(start)):
                   c_f_t.append(core_frac*m_planet/m_p_t[-1])
                   e_f_t.append(1.-c_f_t[-1])
                   e_comp_t.append(new_e_frac)
-                  r_p_t.append(planet_radius(m_p_t[-1],0,100)) #Assuming that the planet follows the 100% H2O M-R relation from Noack et al. (2016)
+                  if m_p_t[-1] > 3.:
+                        #Matching 6.4 M_E and 1.563 R_E roughly with Fe core
+                        r_p_t.append(planet_radius(m_p_t[-1],51,0))
+                  else:
+                        #Matching 1.9 M_E and 1.6 R_E as pure H2O
+                        r_p_t.append(planet_radius(m_p_t[-1],0,100))
                   grav_t.append(f_grav(m_p_t[-1],r_p_t[-1]))
                   roche_t.append(f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet))
                   ktide_t.append(f_ktide(roche_t[-1],r_p_t[-1]))
