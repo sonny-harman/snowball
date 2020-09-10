@@ -388,6 +388,7 @@ for j in range(len(start)):
 
 if diags:
       m_oxygen_gained = e_f_t[current_age_ind]*m_p_t[current_age_ind]*e_comp_t[current_age_ind][envelope_species.index('O')]
+      surface_P = m_Earth*m_oxygen_gained*grav_t[current_age_ind]/(4*pi*(r_p_t[current_age_ind]*r_Earth)**2.)
       print(f"Photon-limited mass loss = {photon_loss:10.4e}; RR-limited loss = {RR_loss:10.4e}; energy-limited loss = {energy_loss:10.4e}; diffusion-limited loss = {diffusion_loss:10.4e} [m_Earth]")
       print(f"{m_p_t[0]:6.4f}-->{m_p_t[-1]:6.4f} m_Earth; total mass change = {mass_change:6.4f} m_Earth")
       print(f"{r_p_t[0]:6.4f}-->{r_p_t[-1]:6.4f} r_Earth over this time, or {100*(r_p_t[-1]-r_p_t[1])/r_p_t[0]:6.4f}%")
@@ -395,6 +396,8 @@ if diags:
       print(f"                        = {escape_flux_t[age.index(current_age)]:8.2e} molec/m2/s")
       print(f"                        = {escape_flux_t[age.index(current_age)]/1e4:8.2e} molec/cm2/s")
       print(f"\n  M_O2 gained = {m_oxygen_gained:7.5f} Earth masses ({m_oxygen_gained*m_Earth/(16*m_ocean/18):7.5f} Earth oceans equiv.) at current age")
+      print(f"          m_O2 = {m_oxygen_gained*m_Earth} kg")
+      print(f"          (M_O2 --> P_O2 @ surface = {surface_P/1E5:10.5e} bars")
       print(f"Present-day m_p = {m_p_t[current_age_ind]:6.4f} m_Earth; r_p = {r_p_t[current_age_ind]:6.4f} r_Earth")
       if mode == 'reverse':
             print(f"Initial envelope fraction = {e_f_t[0]:10.5e} and composition = {e_comp_t[0]}; initial R = {r_p_t[0]:8.6f} and M = {m_p_t[0]:8.6f}")
