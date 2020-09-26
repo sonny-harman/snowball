@@ -3,7 +3,7 @@
 #     the underlying physics of the model.
 
 #mubar is the befault mean molecular weight of the atmosphere
-from planet import a_planet,hnu,envelope_species
+from planet import a_planet,m_planet,hnu,envelope_species
 from constants import kb,Rconst,m_H,h,c,G,r_Earth
 from math import log10,exp
 from bisect import bisect_left,bisect_right
@@ -22,7 +22,7 @@ AN = lambda xfe,xh2o: 7121 - 20.21*xfe + xh2o*(15.23 + 0.239*xfe)
 ANFE = lambda xfe: 7121 - 20.21*xfe + (1-xfe)*(15.23 + 0.239*xfe)
 ANH2O = lambda xh2o: 7121 + xh2o*(15.23)
 CN = lambda xh2o: 0.2645 + 0.00048*xh2o
-f_RpN = lambda mp,xfe,xh2o: 1000*AN(xfe,xh2o)*mp**CN(xh2o)/r_Earth
+f_RpN = lambda xfe,xh2o,mp: 1000*AN(xfe,xh2o)*mp**CN(xh2o)/r_Earth
 
 #lambda function for finding the luminosity (in solar) for a 0.2<M<0.85 M_solar star (Cuntz & Wang, 2018)
 f_lum_CW18 = lambda M : M**(-141.7*M**4. + 232.4*M**3. - 129.1*M**2. + 33.29*M + 0.215)
@@ -42,13 +42,50 @@ def crossover_mass(T,flux,gravity,X,mu_background,mass=1.):
       #     the temperature T (K), flux (molecules/m2/s), gravity 
       #     (m/s2), mixing ratio of escaping species X, and binary 
       #     diffusion parameterizations given by generic_diffusion 
-      #     (/m/s).
-      cm = mass + kb*T*flux/(b*m_H*gravity*X)
+      #     (/m/s). Diffusion limit units are 
+      cm = mass + kb*T*flux/(b*m_H*gravity*X) if X > 1.E-30 else 1.
       diff_limit = b*gravity*X*m_H*(mu_background-mass)/(kb*T*(1+X)) #add'l 1/(1+f_i) term from Hunten (1973b)
       return cm,diff_limit
 
-def planet_radius(mass,xfe,xh2o):
-      radius = f_RpN(mass,xfe,xh2o)
+def bisect2(low1,high1,low2,high2,whichmax,match,function,threshold):
+      fhigh = function(low1,high2)
+      flow = function(high1,low2)
+      if fhigh < match:
+            print(f'Stopping: {low1},{high2} combo is not sufficient: {fhigh}')
+            return low1,high2,fhigh
+      elif flow > match:
+            print(f'Stopping: {high1},{low2} combo is not sufficient: {flow}')
+            return high1,low2,flow
+      
+      eps = abs(match - fhigh)
+      i = 0
+      l1 = low1; l2 = low2; h1 = high1; h2 = high2
+      guess1 = l1
+      guess2 = (l2 + h2)/2
+      flow2 = function(guess1,l2)
+      fhigh2 = function(guess1,h2)
+      while eps > threshold:
+            i += 1
+            fg = function(guess1,guess2)
+            if whichmax=='H2O':
+                  if function(guess1,l2) < match and function(guess1,h2) > match: #
+                        if fg > match:
+                              h2 = guess2
+                        if fg < match:
+                              l2 = guess2
+                  elif function(guess1,l2) > match: #still too big
+                        l1 = 0.99*l1 + 0.01*h1
+                        l2 = low2; h2 = high2
+                        
+            guess1 = l1
+            guess2 = (l2 + h2)/2
+            eps = abs(match - function(guess1,guess2))
+            if i > 100:
+                  break
+      return guess1,guess2,function(guess1,guess2)
+
+def planet_radius(xfe,xh2o,mass=m_planet):
+      radius = f_RpN(xfe,xh2o,mass)
       return radius
 
 def read_baraffe(mass):

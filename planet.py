@@ -24,9 +24,9 @@ albedo = 0.0       #Bond albedo (dimensionless)
 #a present planet w/ 20% envelope @ 90% H2O, 10% H2 evolves from a planet with an envelope fraction of 2.62447e-01 and 
 #     composition = [0.31764360070863473, 4.386069211982582e-51, 0.6823563992913653, 2.958440455988615e-51]; initial R = 1.698912 and M = 2.06086
 # 99.5% core_frac, all H2 - initial envelope fraction = 4.50385e-02 and composition = [1.0, 0.0, 0.0, 0.0]; initial R = 1.688117 and M = 2.019254
-core_frac = 0.9   #core mass fraction
+core_frac = 0.9   #core mass fraction - core and envelope fractions are now computed on the fly from bulk composition
 core_den = 5.E3   #core mean density, kg/m3
-envelope_frac = 1-core_frac #do the envelope by subtraction
+envelope_frac = 1-core_frac #do the envelope by subtraction - core and envelope fractions are now computed on the fly from bulk composition
 envelope_comp = [0.0,0,1,0] #[0.31764360070863473, 4.386069211982582e-51, 0.6823563992913653, 2.958440455988615e-51] #surface mixing ratios - must sum to 1
 envelope_species= ['H2', 'He',  'H2O', 'O'] #component molecular masses [amu]
 envelope_compm= [2, 4, 18, 16] #component molecular masses [amu]

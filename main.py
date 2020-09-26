@@ -14,6 +14,7 @@ from modules import read_baraffe,read_hidalgo
 from modules import read_thermo
 from modules import generic_diffusion,crossover_mass,planet_radius
 from modules import find_nearest,find_above,find_below,f_lum_CW18
+from modules import bisect2
 from modules import calculate_water_photolysis,calc_escape_regime
 from atmospheric_mass_estimate import atm_est
 from constants import m_Earth,r_Earth,flux_Earth,m_ocean
@@ -27,7 +28,8 @@ from planet import m_star,age_star,l_star,d_star,J_mag_star
 from planet import stellar_tracks,norm_lum,do_euv_sat,do_emp_sat,do_emp_scale
 from planet import xuv_threshold,p_photo,p_xuvcofac,mode,efficiencies,variable_efficiency,hnu
 
-plots = False
+num_age_points = 3000
+plots = True
 estimate_atmosphere = False
 calc_water_photo = False
 diags = True
@@ -45,7 +47,7 @@ if diags:
 #     generate sinusoidal noise at very early times if not caught and set aside. Terrestrial planets
 #     like the Earth take roughly 0.03-0.1 Gyr to form; giant planets are ~0.001-0.01 Gyr (Helled et al., 2013)
 min_age = max([min(a1),min(a2),0.01]); max_age = min([max(a1),max(a2),14.5])
-age = [a for a in logspace(log10(min_age),log10(max_age),num=3000,endpoint=True)]
+age = [a for a in logspace(log10(min_age),log10(max_age),num=num_age_points,endpoint=True)]
 flum1 = interp1d(a1,l1,kind='cubic'); flum2 = interp1d(a2,l2,kind='cubic') 
 lum1inter = flum1(age); lum2inter = flum2(age)
 f1 = (m2 - m_star)/(m2 - m1); f2 = (m_star - m1)/(m2 - m1)
@@ -156,12 +158,15 @@ f_c_p = lambda n,T : ((T<1000)*(sum([coeffs[n][0][i+2]*T**i for i in range(-2,5)
 c_f_t = [core_frac]; c_d_t = [core_den]
 e_f_t = [envelope_frac]; e_comp_t = [envelope_comp]; num_comps = len(envelope_comp)
 m_p_t = [m_planet]
-if m_p_t[-1] > 3.:
-      #Matching 6.4 M_E and 1.563 R_E roughly with Fe core
-      r_p_t = [planet_radius(m_p_t[-1],51,0)] #larger mass-radius planet starting points are likely to be silicate-rich; need to be aware of envelope_frac
-else:
-      #Matching 1.9 M_E and 1.6 R_E as pure H2O
-      r_p_t = [planet_radius(m_p_t[-1],0,100)]
+
+est_Fe,est_H2O,est_rad = bisect2(0,100,0,100,'H2O',r_planet,planet_radius,1.E-4)
+est_Si = 100 - est_Fe - est_H2O
+r_p_t = [est_rad]
+#Reset initial envelope fraction such that it reflects optimistic water abundance
+e_f_t[-1] = est_H2O/100.
+c_f_t[-1] = 1 - est_H2O/100.
+core_frac = c_f_t[-1]
+
 grav_t = [f_grav(m_planet,r_planet)] #Gravity [m/s2] at the 20 mbar level assumed to be for m_planet @ r_planet
 roche_t = [f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet)]
 ktide_t = [f_ktide(roche_t[-1],r_p_t[-1])]
@@ -217,8 +222,8 @@ if diags:
 #Estimating the atmospheric mass relies on the equilibrium temperature
 if estimate_atmosphere:
       T_skin = T_eq_t[-1]/2**0.25
-      fe_core_radius = planet_radius(c_f_t[-1]*m_p_t[-1],100,0)
-      h2o_core_radius = planet_radius(c_f_t[-1]*m_p_t[-1],0,100)
+      fe_core_radius = planet_radius(100,0,c_f_t[-1]*m_p_t[-1])
+      h2o_core_radius = planet_radius(0,100,c_f_t[-1]*m_p_t[-1])
       atm_est(grav_t[-1],T_skin,e_f_t[-1]*m_p_t[-1]*m_Earth,fe_core_radius*r_Earth,vmr_t[-1],mu_t[-1],diags,plotdir)
       if diags:
             print(f"Fe core = {fe_core_radius:6.2f} Earth radii; water core = {h2o_core_radius:6.2f} Earth radii")
@@ -249,8 +254,8 @@ for j in range(len(start)):
             #Start by determining which regime the escape occupies by calculating J_0 from eqns. 18-20 in Owen & Alvarez (2016)
             #Returning the threshold planetary mass for the energy- to photon-limited regimes (Mp > actual mass means photon-limited),
             #     and the flux (in photon/m2/s) needed to hop between the different regimes.
-            if xuv_flux[i] > 180.: #Kelvin - motivated by Koskinen et al. (2007) and Murray-Clay et al. (2009)
-                  T_exo = 2E4 #Alternatively, 2E4, but <15% change in value
+            if xuv_flux[i] > 180.: #Motivated by Koskinen et al. (2007) and Murray-Clay et al. (2009) for HJ escape
+                  T_exo = 1E4 #Alternatively, 2E4, but <15% change in value
                   #gamma_exo = 1.53 #Determined from McBride et al. for H, H2, and O = 1.66 @ 10k K -> 1.53 @ 20k K
             else:
                   T_exo = 2E3 
@@ -277,8 +282,7 @@ for j in range(len(start)):
             #include diffusion limit
             ref_H_flux = epsilon_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H) #H/m2/s
             Htot = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
-            cm,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
-            crossover_mass_t.append(cm)
+            Htot_mass = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
             #Select escape regime based on XUV threshold fluxes
             if m_p_t[-1] < mp_crit[-1] and xuv_flux[i] < F_RR2photon[-1]:
                   #Photon-limited escape rate, per Owen & Alvarez (2016)
@@ -291,38 +295,55 @@ for j in range(len(start)):
                   mflux = 7.11E4*(xuv_flux[i])**0.5*r_p_t[-1]**1.5 #kg/s
                   regime_t.append(2)
                   RR_loss = RR_loss + mflux*dts/m_Earth
-            elif Htot > 0.01: #If [H] is not prevalent, we enter the diffusion limited regime
+            elif Htot > 0.01: #If [H] is prevalent, we enter the energy-limited regime
                   #calculate energy-limited escape rate following Luger & Barnes (2015)
                   mflux = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
                   regime_t.append(1)
                   energy_loss = energy_loss + mflux*dts/m_Earth
-            else:
-                  mflux = diff_limit*4*pi*r_p_m**2/m_H
-                  regime_t.append(4)
-                  diffusion_loss = diffusion_loss + mflux*dts/m_Earth
-            eflux = mflux/(m_H*4*pi*r_p_m**2.) #H atoms/m2/s; assume the escape flux is H to start, then used modified drag-off below
+            else: #we're stuck in the diffusion-limited regime, which also respects the energy limit
+                  energy_limit = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
+                  donotuse,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
+                  diffusion_limit = diff_limit*4*pi*r_p_m**2*m_H #kg/s
+                  mflux = min(energy_limit,diffusion_limit)
+                  if diffusion_limit < energy_limit:
+                        regime_t.append(4)
+                        diffusion_loss = diffusion_loss + mflux*dts/m_Earth
+                  else:
+                        regime_t.append(1)
+                        energy_loss = energy_loss + mflux*dts/m_Earth
+            eflux = mflux/(m_H*4*pi*r_p_m**2.) #H atoms/m2/s; assume the escape flux is H to start, then calculate drag-off below
             mescape_flux_t.append(mflux)
             escape_flux_t.append(eflux)
+            #reset the crossover mass for the actual escaping flux value
+            cm,diff_limit = crossover_mass(T_eq_t[-1],eflux,grav_t[-1],Htot,mu_t[-1]) #diff_limit isn't used again after this
+            crossover_mass_t.append(cm)
+            
             #Convert escape flux into planet mass and inventory modifications
             #Include only species that are below the crossover mass and have non-zero inventories
             #TODO what about drag-off in reverse mode? It should only see if a gas is already present, otherwise no drag-off or re-addition?
             escaping_species = [envelope_compm.index(m) for m in envelope_compm[1:] if crossover_mass_t[-1]>m and e_comp_t[-1][envelope_compm.index(m)]>0.] 
+            escaping_species = [s for _,s in sorted(zip([envelope_compm[si] for si in escaping_species],escaping_species))]
             new_mass = [e_f_t[-1]*m_p_kg*e_comp_t[-1][s] for s in range(len(envelope_species))]
             old_mass = new_mass #for differencing later, once all the escape logic is carried out
             delta_mass = 0.
             if any(escaping_species):
-                  escaping_MMRs = [max(1.E-30,e_comp_t[-1][s]) for s in escaping_species]
-                  escaping_MMRs.insert(0,max(1.E-30,e_comp_t[-1][0]))
-                  escaping_VMRs = [max(1.E-50,vmr_t[-1][s]) for s in escaping_species]
-                  escaping_VMRs.insert(0,Htot)
-                  escaping_mus = [envelope_compm[s] for s in escaping_species]
-                  escaping_mus.insert(0,1.)
-                  mu_heavy = f_mu(escaping_MMRs[1:],escaping_mus[1:])*sum(escaping_MMRs[1:])
-                  vmr_heavy = sum([vmr_t[-1][s] for s in escaping_species])
-                  mu_escaping = f_mu(escaping_MMRs,escaping_mus)*sum(escaping_MMRs)
-                  b_H = generic_diffusion(1.,mu_t[-1],T_eq_t[-1])
-                  phi_prime = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
-                  m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
+                  escaping_mus = [1.]; escaping_VMRs = [Htot]; escaping_MMRs = [Htot_mass] #initialize the escaping gases
+                  m_c_prime = cm
+                  for s in escaping_species:
+                        if envelope_compm[s] < m_c_prime:
+                              escaping_MMRs.append(e_comp_t[-1][s])
+                              escaping_VMRs.append(vmr_t[-1][s])
+                              escaping_mus.append(envelope_compm[s])
+                              mu_heavy = f_mu(escaping_MMRs[1:],escaping_mus[1:])*sum(escaping_MMRs[1:])
+                              vmr_heavy = sum([vmr_t[-1][si] for si in escaping_species])
+                              mu_escaping = f_mu(escaping_MMRs,escaping_mus)*sum(escaping_MMRs)
+                              b_H = generic_diffusion(1.,mu_t[-1],T_eq_t[-1])
+                              phi_prime = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
+                              ###TODO this crossover mass should be for everything but the heaviest component, or it doesn't mean what it should
+                              if escaping_species.index(s) < len(escaping_species)-1:
+                                    m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
+                        else:
+                              escaping_species.pop(escaping_species.index(s))
                   crossover_mass_t[-1] = m_c_prime
                   escaping_species.insert(0,0) #need to include H now in escape
                   F_H_prime = eflux*Htot*(m_c_prime - 1)/sum([escaping_mus[k]*escaping_VMRs[k]*(m_c_prime - escaping_mus[k]) for k in range(len(escaping_species))])
@@ -331,7 +352,6 @@ for j in range(len(start)):
                         del_m_comp = 4*pi*r_p_m**2*step[j]*dts*envelope_compm[s]*m_H*F_H_prime*escaping_VMRs[k]*(m_c_prime - escaping_mus[k])/(Htot*(m_c_prime - 1))
                         new_mass[s] -= del_m_comp
                         delta_mass += del_m_comp
-            #TODO new mass addition based on composition, crossover mass !!!!!!!!
             else:
                   new_mass[0] -= mflux*step[j]*dts #kg
                   delta_mass += mflux*step[j]*dts #kg
@@ -353,11 +373,10 @@ for j in range(len(start)):
             #delta_mass = -1*sum([old-new for old,new in zip(old_mass,new_mass)])
             new_e_frac = [m/max(1.E-90,sum(new_mass)) for m in new_mass]
             mass_change = mass_change+abs(delta_mass)/m_Earth
-            #if crossover_mass_t[-1] > 18:
-            #      print(age[i],regime_t[-1],epsilon_t[-1],m_p_kg,r_p_m,mu_t[-1],vmr_t[-1])
-            #else:
-            #      print('nah -- ',regime_t[-1],epsilon_t[-1],m_p_kg,r_p_m,mu_t[-1],vmr_t[-1])
-            
+            est_H2O = max(0., est_H2O-100*delta_mass/(m_p_t[-1]*m_Earth))
+            est_tot = est_H2O + est_Si + est_Fe
+            est_Fe = 100*est_Fe / est_tot 
+            est_Si = 100*est_Si / est_tot
             #update variables
             if i < len(age)-1:
                   #Append new values as we move backwards in time, then 'flip' variables
@@ -365,12 +384,7 @@ for j in range(len(start)):
                   c_f_t.append(core_frac*m_planet/m_p_t[-1])
                   e_f_t.append(1.-c_f_t[-1])
                   e_comp_t.append(new_e_frac)
-                  if m_p_t[-1] > 3.:
-                        #Matching 6.4 M_E and 1.563 R_E roughly with Fe core
-                        r_p_t.append(planet_radius(m_p_t[-1],51,0))
-                  else:
-                        #Matching 1.9 M_E and 1.6 R_E as pure H2O
-                        r_p_t.append(planet_radius(m_p_t[-1],0,100))
+                  r_p_t.append(planet_radius(est_Fe,est_H2O,m_p_t[-1]))
                   grav_t.append(f_grav(m_p_t[-1],r_p_t[-1]))
                   roche_t.append(f_roche(r_p_t[-1],m_p_t[-1],m_star,a_planet))
                   ktide_t.append(f_ktide(roche_t[-1],r_p_t[-1]))

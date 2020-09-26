@@ -4,6 +4,7 @@
 from math import pi,log10,exp
 from planet import r_planet,m_planet
 from constants import G,kb,m_Earth,r_Earth,m_H
+from modules import bisect2
 
 def bisect(low,high,match,function,threshold):
       guess = (low + high)/2
@@ -51,7 +52,6 @@ print("Fu et al. (2009) radius prediction for varying water mass fractions:")
 for i in range(len(Rpf)):
       print(f"\t {water_mf[i]:4.2f}% H2O = {Rpf[i]:5.2f} Earth radii")
 
-
 #Nettelman et al., 2010 - Interior models of GJ436b - Eq. 1 and coeff. in text
 #     (0.25 M_E rocky core, T set at 1 bar)
 N436_iso = [1.6586, 0.9950, 0.1549, 0.]         #T = 1000 K @ 1 bar, isothermal
@@ -64,13 +64,13 @@ print(f"Nettelman et al. (2010) radius prediction for 1000K adiabatic atm. = {Rn
 ##Zeng et al., 2013; 2016 - Fe and Earth-like compositions
 ##CMF_Z = (1/0.21)*(1.07 - r_planet/m_planet**(1/3.7)) #<-- this is a negative number for TOI-1266c's reported M/R
 
-#Modirrousta-Galian et al., 2020 - The Bimodal Distribution of exoplanet radii - has parameterizations from Zeng et al. (2013; 2016)
 Rfe_MG = lambda mp: 0.815*(mp)**(1/4.176) #100% iron
 Rrock_MG = lambda mp: 1.007*(mp)**(1/3.7) #100% silicate
 Rrock1_MG = lambda mp: 1.41*(mp)**(1/3.905) #1% H2 on rocky core
 RH2O_MG = lambda mp: 1.41*(mp)**(1/3.905) #100% H2O
 RH2_MG = lambda mp: 4.106*(mp)**(1/5.01) #100% H2 planet 
 Rremnant_MG = lambda mp: 0.469*(mp)**(1/3) #From Mocquet et al., 2014, for super-dense remnants
+#Modirrousta-Galian et al., 2020 - The Bimodal Distribution of exoplanet radii - has parameterizations from Zeng et al. (2013; 2016)
 print(f"Modirrousta-Galian radii fits to Zeng et al. curves:"
       + f"\n       100% Fe       = {Rfe_MG(m_planet):6.4f} R_earth"
       + f"\n       100% silicate = {Rrock_MG(m_planet):6.4f} R_earth"
@@ -79,20 +79,18 @@ print(f"Modirrousta-Galian radii fits to Zeng et al. curves:"
       + f"\n       100% H2       = {RH2_MG(m_planet):6.4f} R_earth"
       + f"\n       Remnant core  = {Rremnant_MG(m_planet):6.4f} R_earth")
 
-#Noack et al. (2016) - Water-rich planets: How habitable... Eq. 4 and Table 4
-#     Rp normally in km, Mp in Earth masses
-XFe = 0.; XH2O = 77.
 AN = lambda xfe,xh2o: 7121 - 20.21*xfe + xh2o*(15.23 + 0.239*xfe)
 ANFE = lambda xfe: 7121 - 20.21*xfe + (1-xfe)*(15.23 + 0.239*xfe)
 ANH2O = lambda xh2o: 7121 + xh2o*(15.23)
 CN = lambda xh2o: 0.2645 + 0.00048*xh2o
 f_RpN = lambda xfe,xh2o: 1000*AN(xfe,xh2o)*m_planet**CN(xh2o)/r_Earth
+#Noack et al. (2016) - Water-rich planets: How habitable... Eq. 4 and Table 4
+#     Rp normally in km, Mp in Earth masses
 fracFe = 0
 fracH2O = 100-fracFe
 print(f'Noack et al. (2016) prediction for {fracFe:2.0f}% Fe, {100-fracFe-fracH2O:2.0f}% silicate, and {fracH2O:2.0f}% H2O = {f_RpN(fracFe,fracH2O):5.2f} Earth radii')
-
-
-
+bFeN,bH2ON,brpN = bisect2(0,100,0,100,'Fe',r_planet,f_RpN,1.E-4)
+print(f'    From bisect: {bFeN:2.0f}% Fe, {100-bFeN-bH2ON:2.0f}% silicate, {bH2ON:2.0f}% H2O -> {brpN:5.2f} Earth radii')
 
 exit()
 #Duan & Zhang, 2006 - Equation of state of the H2O, CO2, and H2O–CO2 systems up to 10 GPa and 2573.15 K
