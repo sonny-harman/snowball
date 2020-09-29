@@ -1,5 +1,6 @@
 #### Outputs
 /saved_plots/
+record_run.txt
 
 #### Python detritus 
 __pycache__

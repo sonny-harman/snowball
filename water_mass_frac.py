@@ -2,7 +2,6 @@
 # fractions based on Noack et al., 2016. 
 
 from math import pi,log10,exp
-from planet import r_planet,m_planet
 from constants import G,kb,m_Earth,r_Earth,m_H
 from modules import bisect2
 
@@ -23,6 +22,10 @@ def bisect(low,high,match,function,threshold):
                   break
       return guess,function(guess)
 
+# m_planet = [0,0.6,1.9,4.2,6.4] #M_Earth -2, -1, 0, 1, 2 sigma
+# r_planet = [1.563,1.673,1.76] #R_Earth 2 sigma
+m_planet = 1.9#6.4 
+r_planet = 1.673#1.563
 Rp = r_planet*r_Earth
 Mp = m_planet*m_Earth
 g0 = G*Mp/(Rp**2.)
@@ -83,13 +86,14 @@ AN = lambda xfe,xh2o: 7121 - 20.21*xfe + xh2o*(15.23 + 0.239*xfe)
 ANFE = lambda xfe: 7121 - 20.21*xfe + (1-xfe)*(15.23 + 0.239*xfe)
 ANH2O = lambda xh2o: 7121 + xh2o*(15.23)
 CN = lambda xh2o: 0.2645 + 0.00048*xh2o
-f_RpN = lambda xfe,xh2o: 1000*AN(xfe,xh2o)*m_planet**CN(xh2o)/r_Earth
+f_RpN = lambda xfe,xh2o,mass: 1000*AN(xfe,xh2o)*mass**CN(xh2o)/r_Earth
 #Noack et al. (2016) - Water-rich planets: How habitable... Eq. 4 and Table 4
 #     Rp normally in km, Mp in Earth masses
-fracFe = 0
-fracH2O = 100-fracFe
-print(f'Noack et al. (2016) prediction for {fracFe:2.0f}% Fe, {100-fracFe-fracH2O:2.0f}% silicate, and {fracH2O:2.0f}% H2O = {f_RpN(fracFe,fracH2O):5.2f} Earth radii')
-bFeN,bH2ON,brpN = bisect2(0,100,0,100,'Fe',r_planet,f_RpN,1.E-4)
+fracFe = 55
+fracSi = 45
+fracH2O = 100-fracSi-fracFe
+print(f'Noack et al. (2016) prediction for {fracFe:2.0f}% Fe, {fracSi:2.0f}% silicate, and {fracH2O:2.0f}% H2O = {f_RpN(fracFe,fracH2O,m_planet):5.2f} Earth radii')
+bFeN,bH2ON,brpN = bisect2(0,100,0,100,'Fe',r_planet,m_planet,f_RpN,1.E-4)
 print(f'    From bisect: {bFeN:2.0f}% Fe, {100-bFeN-bH2ON:2.0f}% silicate, {bH2ON:2.0f}% H2O -> {brpN:5.2f} Earth radii')
 
 exit()

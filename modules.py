@@ -3,7 +3,6 @@
 #     the underlying physics of the model.
 
 #mubar is the befault mean molecular weight of the atmosphere
-from planet import a_planet,m_planet,hnu,envelope_species
 from constants import kb,Rconst,m_H,h,c,G,r_Earth
 from math import log10,exp
 from bisect import bisect_left,bisect_right
@@ -47,14 +46,14 @@ def crossover_mass(T,flux,gravity,X,mu_background,mass=1.):
       diff_limit = b*gravity*X*m_H*(mu_background-mass)/(kb*T*(1+X)) #add'l 1/(1+f_i) term from Hunten (1973b)
       return cm,diff_limit
 
-def bisect2(low1,high1,low2,high2,whichmax,match,function,threshold):
-      fhigh = function(low1,high2)
-      flow = function(high1,low2)
+def bisect2(low1,high1,low2,high2,whichmax,match,aux,function,threshold):
+      fhigh = function(low1,high2,aux)
+      flow = function(high1,low2,aux)
       if fhigh < match:
-            print(f'Stopping: {low1},{high2} combo is not sufficient: {fhigh}')
+            #print(f'Stopping: {low1},{high2} combo is not sufficient: {fhigh}')
             return low1,high2,fhigh
       elif flow > match:
-            print(f'Stopping: {high1},{low2} combo is not sufficient: {flow}')
+            #print(f'Stopping: {high1},{low2} combo is not sufficient: {flow}')
             return high1,low2,flow
       
       eps = abs(match - fhigh)
@@ -62,29 +61,37 @@ def bisect2(low1,high1,low2,high2,whichmax,match,function,threshold):
       l1 = low1; l2 = low2; h1 = high1; h2 = high2
       guess1 = l1
       guess2 = (l2 + h2)/2
-      flow2 = function(guess1,l2)
-      fhigh2 = function(guess1,h2)
+      flow2 = function(guess1,l2,aux)
+      fhigh2 = function(guess1,h2,aux)
       while eps > threshold:
             i += 1
-            fg = function(guess1,guess2)
+            fg = function(guess1,guess2,aux)
             if whichmax=='H2O':
-                  if function(guess1,l2) < match and function(guess1,h2) > match: #
+                  if function(guess1,l2,aux) < match and function(guess1,h2,aux) > match: #
                         if fg > match:
                               h2 = guess2
                         if fg < match:
                               l2 = guess2
-                  elif function(guess1,l2) > match: #still too big
+                  elif function(guess1,l2,aux) > match: #still too big
                         l1 = 0.99*l1 + 0.01*h1
                         l2 = low2; h2 = high2
-                        
+            elif whichmax=='Fe':
+                  if function(h1,guess2,aux) < match and function(l1,guess2,aux) > match: #
+                        if fg > match:
+                              l1 = guess1
+                        if fg < match:
+                              h1 = guess2
+                  elif function(h1,guess2,aux) < match: #still too small
+                        h1 = 0.99*h1 + 0.01*l1
+                        l2 = low2; h2 = high2
             guess1 = l1
             guess2 = (l2 + h2)/2
-            eps = abs(match - function(guess1,guess2))
-            if i > 100:
+            eps = abs(match - function(guess1,guess2,aux))
+            if i > 1000:
                   break
-      return guess1,guess2,function(guess1,guess2)
+      return guess1,guess2,function(guess1,guess2,aux)
 
-def planet_radius(xfe,xh2o,mass=m_planet):
+def planet_radius(xfe,xh2o,mass):
       radius = f_RpN(xfe,xh2o,mass)
       return radius
 
@@ -145,7 +152,7 @@ def read_baraffe_grid():
                   if m not in mass:
                         count += 1
                   mass.append(m); age.append(a); temp.append(t); luminosity.append(lum); grav.append(g)
-      print(f"Number of stars in grid: {count:2.0f}")
+      #print(f"Number of stars in grid: {count:2.0f}")
       return mass,age,temp,luminosity,grav
 
 def read_hidalgo(stellar_mass):
@@ -204,7 +211,7 @@ def read_pt_profile():
             t.append(float(l.split()[3]))
       return p,alt,t
 
-def calc_escape_regime(epsilon,mp,rp,T,mu):
+def calc_escape_regime(epsilon,mp,rp,T,mu,hnu):
       photon_energy_mass = epsilon*rp*hnu/(4*G*m_H)
       cs2 = kb*T/(m_H*mu) #alternate sound speed calculation
       alpha_B = 2.6E-19*(T/1E4)**-0.7           #cm3/s to m3/s conversion included; from Owen & Alvarez (2016)
@@ -221,7 +228,7 @@ def calc_escape_regime(epsilon,mp,rp,T,mu):
       J_0_RR_energy = W_0_term*J_cofac_inv/(4*photon_energy_mass/mp) #photon/m2/s
       return photon_energy_mass,J_0_RR_photon,J_0_RR_energy
 
-def calculate_water_photolysis():
+def calculate_water_photolysis(a_planet):
       Xrayrate = 0.; EUVrate = 0.; NUVrate = 0.
       #X-ray (5-100 A), EUV (100-920 A), NUV (920-1940 A)
       #xray = [i for i in range(5,100)]; euv = [i for i in range(100,920)]; nuv = [i for i in range(920,1940)]

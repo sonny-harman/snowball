@@ -3,8 +3,6 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 #case-specific variables, constants, and functions
-from planet import p_photo,envelope_species,envelope_compm
-from planet import r_planet,m_planet
 from constants import G,kb,m_H,Rconst
 from constants import r_Earth,m_Earth
 from modules import read_thermo,read_pt_profile
@@ -13,9 +11,9 @@ a_H2 = [4.966884120E+08,-3.147547149E+05,7.984121880E+01,-8.414789210E-03,4.7532
 
 #local variable definitions
 H_frac = 0.01
-match_rc = False
+match_rc = True
 
-def atm_est(g,t_eq,envelope_mass,r_core,vmr,mu,diags,plotdir):
+def atm_est(r_planet,m_planet,g,t_eq,envelope_species,envelope_compm,envelope_mass,r_core,vmr,mu,p_photo,diags,plotdir):
       #Read in thermochemical data for calculating c_p of species
       coeffs = {}
       for species in envelope_species:
@@ -91,4 +89,3 @@ def atm_est(g,t_eq,envelope_mass,r_core,vmr,mu,diags,plotdir):
             fig4.savefig(plotdir+'atmospheric_estimate.png',dpi=200)
             plt.show()
       return
-

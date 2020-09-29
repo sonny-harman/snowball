@@ -6,8 +6,6 @@ stellar_tracks = 'Hidalgo' #Stellar luminosity reference options are 'Baraffe' (
 norm_lum = True   #Normalize interpolated luminosity to match stellar luminosity
 m_star = 0.437    #solar masses
 r_star = 0.4232   #solar radii
-age_star = 7.9    #stellar age in Gyr 2.7-7.9-12.1 (-2,0,+2 sigma)
-l_star = 0.02629  #solar luminosities 0.02554-0.02629-0.0270 (-2,0,+2 sigma)
 logg = 4.826      #surface gravity, cm/s2
 Teff = 3573       #K
 FeH = -0.08       #stellar metallicity [dex]
@@ -15,8 +13,6 @@ J_mag_star = 9.706#2MASS J magnitude
 d_star = 36.011   #parsecs
 
 #Planet and atmosphere-specific variables
-m_planet = 1.9    #Earth masses c: 0-0.6-1.9-4.2-6.4 b: 0-2.9,6.9-12.4-15.9 (-2,-1,0,+1,+2 sigma)
-r_planet = 1.67   #Earth radii  c: 1.563-1.673-1.76  b: 2.385-2.458-2.541 (-2,0,+2 sigma)
 a_planet = 0.1037 #Semi-major axis, au
 albedo = 0.0       #Bond albedo (dimensionless)
 
@@ -27,11 +23,9 @@ albedo = 0.0       #Bond albedo (dimensionless)
 core_frac = 0.9   #core mass fraction - core and envelope fractions are now computed on the fly from bulk composition
 core_den = 5.E3   #core mean density, kg/m3
 envelope_frac = 1-core_frac #do the envelope by subtraction - core and envelope fractions are now computed on the fly from bulk composition
-envelope_comp = [0.0,0,1,0] #[0.31764360070863473, 4.386069211982582e-51, 0.6823563992913653, 2.958440455988615e-51] #surface mixing ratios - must sum to 1
-envelope_species= ['H2', 'He',  'H2O', 'O'] #component molecular masses [amu]
-envelope_compm= [2, 4, 18, 16] #component molecular masses [amu]
-envelope_compH= [1, 0., 2/3, 0.] #fraction of atoms that are H in each species
-efficiencies = [0.3, 0.1, 0.01, 0.01] #escape efficiency epsilon for each component
+envelope_species= ['H2', 'He',  'H2O', 'O', 'CO2'] #component molecular masses [amu]
+envelope_compm= [2, 4, 18, 16, 44] #component molecular masses [amu]
+envelope_compH= [1, 0., 2/3, 0., 0.] #fraction of atoms that are H in each species
 
 #Variables related to escape
 do_emp_sat = True   #empirically match the saturated and subsaturated regime rates from Sanz-Forcada et al. (2011), eq. 5
