@@ -277,9 +277,7 @@ for j in range(len(start)):
             #include diffusion limit
             ref_H_flux = epsilon_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H) #H/m2/s
             Htot = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
-            Htot_mass = Htot
-            cm,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
-            crossover_mass_t.append(cm)
+            Htot_mass = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
             #Select escape regime based on XUV threshold fluxes
             if m_p_t[-1] < mp_crit[-1] and xuv_flux[i] < F_RR2photon[-1]:
                   #Photon-limited escape rate, per Owen & Alvarez (2016)
@@ -292,18 +290,29 @@ for j in range(len(start)):
                   mflux = 7.11E4*(xuv_flux[i])**0.5*r_p_t[-1]**1.5 #kg/s
                   regime_t.append(2)
                   RR_loss = RR_loss + mflux*dts/m_Earth
-            elif Htot > 0.01: #If [H] is not prevalent, we enter the diffusion limited regime
+            elif Htot > 0.01: #If [H] is prevalent, we enter the energy-limited regime
                   #calculate energy-limited escape rate following Luger & Barnes (2015)
                   mflux = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
                   regime_t.append(1)
                   energy_loss = energy_loss + mflux*dts/m_Earth
-            else:
-                  mflux = diff_limit*4*pi*r_p_m**2/m_H
-                  regime_t.append(4)
-                  diffusion_loss = diffusion_loss + mflux*dts/m_Earth
-            eflux = mflux/(m_H*4*pi*r_p_m**2.) #H atoms/m2/s; assume the escape flux is H to start, then used modified drag-off below
+            else: #we're stuck in the diffusion-limited regime, which also respects the energy limit
+                  energy_limit = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
+                  donotuse,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
+                  diffusion_limit = diff_limit*4*pi*r_p_m**2*m_H #kg/s
+                  mflux = min(energy_limit,diffusion_limit)
+                  if diffusion_limit < energy_limit:
+                        regime_t.append(4)
+                        diffusion_loss = diffusion_loss + mflux*dts/m_Earth
+                  else:
+                        regime_t.append(1)
+                        energy_loss = energy_loss + mflux*dts/m_Earth
+            eflux = mflux/(m_H*4*pi*r_p_m**2.) #H atoms/m2/s; assume the escape flux is H to start, then calculate drag-off below
             mescape_flux_t.append(mflux)
             escape_flux_t.append(eflux)
+            #reset the crossover mass for the actual escaping flux value
+            cm,diff_limit = crossover_mass(T_eq_t[-1],eflux,grav_t[-1],Htot,mu_t[-1]) #diff_limit isn't used again after this
+            crossover_mass_t.append(cm)
+                  
             #Convert escape flux into planet mass and inventory modifications
             #Include only species that are below the crossover mass and have non-zero inventories
             escaping_species = [envelope_compm.index(m) for m in envelope_compm[1:] if crossover_mass_t[-1]>m and e_comp_t[-1][envelope_compm.index(m)]>0.] 
