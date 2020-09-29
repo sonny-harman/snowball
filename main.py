@@ -277,6 +277,7 @@ for j in range(len(start)):
             #include diffusion limit
             ref_H_flux = epsilon_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H) #H/m2/s
             Htot = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
+            Htot_mass = Htot
             cm,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
             crossover_mass_t.append(cm)
             #Select escape regime based on XUV threshold fluxes
@@ -305,33 +306,42 @@ for j in range(len(start)):
             escape_flux_t.append(eflux)
             #Convert escape flux into planet mass and inventory modifications
             #Include only species that are below the crossover mass and have non-zero inventories
-            #TODO what about drag-off in reverse mode? It should only see if a gas is already present, otherwise no drag-off or re-addition?
             escaping_species = [envelope_compm.index(m) for m in envelope_compm[1:] if crossover_mass_t[-1]>m and e_comp_t[-1][envelope_compm.index(m)]>0.] 
             new_mass = [e_f_t[-1]*m_p_kg*e_comp_t[-1][s] for s in range(len(envelope_species))]
             old_mass = new_mass #for differencing later, once all the escape logic is carried out
             delta_mass = 0.
+            delta_mass = 0.
+            too_heavy = -1
             if any(escaping_species):
-                  escaping_MMRs = [max(1.E-30,e_comp_t[-1][s]) for s in escaping_species]
-                  escaping_MMRs.insert(0,max(1.E-30,e_comp_t[-1][0]))
-                  escaping_VMRs = [max(1.E-50,vmr_t[-1][s]) for s in escaping_species]
-                  escaping_VMRs.insert(0,Htot)
-                  escaping_mus = [envelope_compm[s] for s in escaping_species]
-                  escaping_mus.insert(0,1.)
-                  mu_heavy = f_mu(escaping_MMRs[1:],escaping_mus[1:])*sum(escaping_MMRs[1:])
-                  vmr_heavy = sum([vmr_t[-1][s] for s in escaping_species])
-                  mu_escaping = f_mu(escaping_MMRs,escaping_mus)*sum(escaping_MMRs)
-                  b_H = generic_diffusion(1.,mu_t[-1],T_eq_t[-1])
-                  phi_prime = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
-                  m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
+                  escaping_mus = [1.]; escaping_VMRs = [Htot]; escaping_MMRs = [Htot_mass] #initialize the escaping gases
+                  m_c_prime = cm
+                  for s in escaping_species:
+                        if envelope_compm[s] < m_c_prime:
+                              escaping_MMRs.append(e_comp_t[-1][s])
+                              escaping_VMRs.append(vmr_t[-1][s])
+                              escaping_mus.append(envelope_compm[s])
+                              mu_heavy = f_mu(escaping_MMRs[1:],escaping_mus[1:])*sum(escaping_MMRs[1:])
+                              vmr_heavy = sum([vmr_t[-1][si] for si in escaping_species])
+                              mu_escaping = f_mu(escaping_MMRs,escaping_mus)*sum(escaping_MMRs)
+                              b_H = generic_diffusion(1.,mu_t[-1],T_eq_t[-1])
+                              phi_prime = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
+                              if escaping_species.index(s) < len(escaping_species)-1:
+                                    m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
+                        else:
+                              too_heavy = escaping_species.index(s)
+                              break
+                  #Now that one species is over the crossover mass, all following species will be too
+                  if too_heavy > 0:
+                        escaping_species = escaping_species[:too_heavy]
                   crossover_mass_t[-1] = m_c_prime
                   escaping_species.insert(0,0) #need to include H now in escape
                   F_H_prime = eflux*Htot*(m_c_prime - 1)/sum([escaping_mus[k]*escaping_VMRs[k]*(m_c_prime - escaping_mus[k]) for k in range(len(escaping_species))])
+            
                   for s in escaping_species:
                         k = escaping_species.index(s)
                         del_m_comp = 4*pi*r_p_m**2*step[j]*dts*envelope_compm[s]*m_H*F_H_prime*escaping_VMRs[k]*(m_c_prime - escaping_mus[k])/(Htot*(m_c_prime - 1))
                         new_mass[s] -= del_m_comp
                         delta_mass += del_m_comp
-            #TODO new mass addition based on composition, crossover mass !!!!!!!!
             else:
                   new_mass[0] -= mflux*step[j]*dts #kg
                   delta_mass += mflux*step[j]*dts #kg
