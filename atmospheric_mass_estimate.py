@@ -37,6 +37,7 @@ def atm_est(r_planet,m_planet,g,t_eq,envelope_species,envelope_compm,envelope_ma
       f_H_below= lambda t,mu,g : kb*t/(mu*m_H*g)
 
       #calculate the extent of the atmosphere, assuming a dry adiabat
+      K_zed = []
       p_temp = [p_photo]; alt_temp = [0.]; T_temp = [t_eq]
       g_temp = g
       m_above = p_photo*4*pi*(r_planet*r_Earth)**2/g_temp
@@ -61,6 +62,10 @@ def atm_est(r_planet,m_planet,g,t_eq,envelope_species,envelope_compm,envelope_ma
             T_temp.append(T_temp[-1] + Gamma_temp*H_temp*H_frac)
             #T_temp.append(min(5999,T_temp[-1] + Gamma_temp*H_temp*H_frac)) #thermochemical data is only good to 6,000 K
             p_temp.append(p_temp[-1]*exp(H_frac))
+            #Calculating the Kzz from Gao et al., 2018 which lays out Ackerman and Marley (2001)'s methodology - produces Kzz ~100 m2/s (1E6 cm2/s), which is low
+            #L_mix = max(0.1*H_temp,H_temp*(T_temp[-1]-T_temp[-2])/(f_temp_interp(p_temp[-1])-f_temp_interp(p_temp[-2])))
+            #Kzz = (H_temp/3)*(L_mix/H_temp)**(4/3)*(Rconst**2*sigma*T_temp[-1]**4/(mu**2*p_temp[-1]*c_temp*T_temp[-1]))**(1/3)
+            #K_zed.append(Kzz)
             if r_planet*r_Earth - alt_temp[-1] < 0.:
                   print('Run out of room - no more planet!')
                   print(rp_temp,alt_temp[-1],T_temp[-1])
@@ -88,4 +93,9 @@ def atm_est(r_planet,m_planet,g,t_eq,envelope_species,envelope_compm,envelope_ma
             ax4.set_title(f"{m_above/m_Earth:6.2f} Earth-mass atmosphere\n {[s+'='+str(round(v,4)) for s,v in zip(envelope_species,vmr)]} [VMR]")
             fig4.savefig(plotdir+'atmospheric_estimate.png',dpi=200)
             plt.show()
+      
+            #fig5,ax5 = plt.subplots()
+            #ax5.loglog(K_zed,p_temp[1:])
+            #ax5.set_ylabel('Pressure [Pa]'); ax5.set_xlabel('Kzz [/m2/s]')
+            #plt.show()
       return
