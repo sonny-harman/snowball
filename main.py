@@ -319,6 +319,7 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                   new_mass = [e_f_t[-1]*m_p_kg*e_comp_t[-1][s] for s in range(len(envelope_species))]
                   old_mass = new_mass #for differencing later, once all the escape logic is carried out
                   delta_mass = 0.
+                  too_heavy = -1
                   if any(escaping_species):
                         escaping_mus = [1.]; escaping_VMRs = [Htot]; escaping_MMRs = [Htot_mass] #initialize the escaping gases
                         m_c_prime = cm
@@ -336,7 +337,11 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                                     if escaping_species.index(s) < len(escaping_species)-1:
                                           m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
                               else:
-                                    escaping_species.pop(escaping_species.index(s))
+                                    too_heavy = escaping_species.index(s)
+                                    break
+                        #Now that one species is over the crossover mass, all following species will be too
+                        if too_heavy > 0:
+                              escaping_species = escaping_species[:too_heavy]
                         crossover_mass_t[-1] = m_c_prime
                         escaping_species.insert(0,0) #need to include H now in escape
                         F_H_prime = eflux*Htot*(m_c_prime - 1)/sum([escaping_mus[k]*escaping_VMRs[k]*(m_c_prime - escaping_mus[k]) for k in range(len(escaping_species))])
@@ -407,15 +412,15 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
 
       #Save the initial and final states for mass, radius, envelope composition; total H lost
       #stellar age, luminosity
-      with open('record_run.txt','a') as saveit:
-            print(
-                  m_p_t[0], m_p_t[current_age_ind], m_p_t[-1],
-                  r_p_t[0],r_p_t[current_age_ind],r_p_t[-1],
-                  c_f_t[0],c_f_t[current_age_ind],c_f_t[-1],
-                  e_f_t[0],e_f_t[current_age_ind],e_f_t[-1],
-                  e_comp_t[0],e_comp_t[current_age_ind],e_comp_t[-1],
-                  mass_change,efficiencies,
-                  file=saveit)
+#      with open('record_run.txt','a') as saveit:
+#            print(
+#                  m_p_t[0], m_p_t[current_age_ind], m_p_t[-1],
+#                  r_p_t[0],r_p_t[current_age_ind],r_p_t[-1],
+#                  c_f_t[0],c_f_t[current_age_ind],c_f_t[-1],
+#                  e_f_t[0],e_f_t[current_age_ind],e_f_t[-1],
+#                  e_comp_t[0],e_comp_t[current_age_ind],e_comp_t[-1],
+#                  mass_change,efficiencies,
+#                  file=saveit)
 
       if diags:
             m_oxygen_gained = e_f_t[current_age_ind]*m_p_t[current_age_ind]*e_comp_t[current_age_ind][envelope_species.index('O')]
