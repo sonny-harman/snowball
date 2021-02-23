@@ -379,7 +379,7 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                   if i < len(age)-1:
                         #Append new values as we move backwards in time, then 'flip' variables
                         m_p_t.append(m_p_t[-1]-delta_mass/m_Earth)
-                        c_f_t.append(core_frac*m_planet/m_p_t[-1])
+                        c_f_t.append(min(1,core_frac*m_planet/m_p_t[-1]))
                         e_f_t.append(1.-c_f_t[-1])
                         e_comp_t.append(new_e_frac)
                         r_p_t.append(planet_radius(est_Fe,est_H2O,m_p_t[-1]))

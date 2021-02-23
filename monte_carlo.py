@@ -22,10 +22,10 @@ import constants
 #stellar age, luminosity
 
 running_MC = True
-ntimes = 1
+ntimes = 10000
 
 #Age, Luminosity, Mass, Radius, H2, He, H2O, CO2, H2 escape eff., H2O escape eff., other eff.
-limits = np.array([[2.7,12.1],[0.02554,0.0270],[0.1,6.4],[1.563,1.76],[-6,0],[-6,0],[-6,0],[-6,0],[0.01,0.4],[0.01,0.4],[0.01,0.1]])
+limits = np.array([[2.7,12.1],[0.02554,0.0270],[1.575,6.4],[1.563,1.76],[-6,0],[-6,0],[-6,0],[-6,0],[0.01,0.4],[0.01,0.4],[0.01,0.1]])
 sampling = LHS(xlimits=limits)
 rand_vals = sampling(ntimes)
 
@@ -97,5 +97,5 @@ df = pd.DataFrame({'Current Stellar Age [Gyr]':age,
       'Mass Lost [M$_{\oplus}$]':dmass
       })
 
-df.to_pickle("./MC_save_single.pkl")
+df.to_pickle("./MC_save_secondrun.pkl")
 
