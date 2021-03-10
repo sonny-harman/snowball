@@ -8,6 +8,8 @@ from math import pi,log10,log,exp
 from sys import exit
 from numpy import linspace,logspace,argmax
 from scipy.interpolate import interp1d,interp2d
+import pickle as pkl
+import datetime
 
 #Custom functions and constants
 from modules import read_baraffe,read_hidalgo
@@ -27,11 +29,12 @@ from planet import m_star,age_star,l_star,d_star,J_mag_star
 from planet import stellar_tracks,norm_lum,do_euv_sat,do_emp_sat,do_emp_scale
 from planet import xuv_threshold,p_photo,p_xuvcofac,mode,efficiencies,variable_efficiency,hnu
 
-plots = False
+plots = True
 estimate_atmosphere = False
 calc_water_photo = False
 diags = True
 save_plots = True; plotdir = "saved_plots/"
+save_run = True
 
 #Read in initial luminosity data, establish finer age grid and interpolate luminosity
 if stellar_tracks =='Baraffe': #Baraffe et al. (2015; A&A)
@@ -435,6 +438,14 @@ if diags:
       else:
             print(f"Present-day envelope fraction = {e_f_t[current_age_ind]:10.5e} and composition = {e_comp_t[current_age_ind]}; initial R = {r_p_t[current_age_ind]:8.6f} and M = {m_p_t[current_age_ind]:8.6f}")
       print(f"Final envelope fraction = {e_f_t[-1]:10.5e} and composition = {e_comp_t[-1]}; R = {r_p_t[-1]:8.6f} and M = {m_p_t[-1]:8.6f}")
+if save_run:
+      savedata = [m_planet, r_planet, a_planet, core_frac, core_den, albedo,
+                  m_star, age_star, l_star, d_star,
+                  age, envelope_species, c_f_t, e_f_t, r_p_t, m_p_t, mescape_flux_t, e_comp_t]
+      timestamp = str(datetime.datetime.now()).strip().replace(':','_')
+      pklfile = timestamp+'.run'
+      with open('saved_singleruns/'+pklfile,'wb') as f:
+            pkl.dump(savedata,f)
 if plots:
       fig1,ax1 = plt.subplots()
       if diags:
@@ -465,6 +476,7 @@ if plots:
             fig1.savefig(plotdir+'luminosity_MS_tau_i_vs_time.png',dpi=200)
 
 if plots:
+      envelope_spec_names = [''.join(f"$_{c}$" if c.isdigit() else c for c in nam) for nam in envelope_species]
       fig2 = plt.figure()
       ax2 = plt.subplot(211)
       ax2.plot(age,m_p_t,'k',label=r'Planet Mass')
@@ -485,7 +497,7 @@ if plots:
       for i in range(len(envelope_species)):
             e_comp_t_spec = [e_comp_t[j][i] for j in range(len(age))] #vmr_t[j][i] for j in range(len(age))]
             #ax2b.plot(age,e_comp_t_spec,label=envelope_species[i])
-            ax2b.plot(age,[a*b*c for a,b,c in zip(m_p_t,e_f_t,e_comp_t_spec)],'--',label=envelope_species[i])
+            ax2b.plot(age,[a*b*c for a,b,c in zip(m_p_t,e_f_t,e_comp_t_spec)],'--',label=envelope_spec_names[i])#ies[i])
       #ax2b.set_ylabel(r'Envelope composition [VMR]')
       ax2b.set_xscale('log')
       ax2b.set_ylabel(r'Envelope composition [$M_{\oplus}$]')
