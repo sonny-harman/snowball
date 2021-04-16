@@ -4,6 +4,7 @@
 
 #Standard library imports
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 from math import pi,log10,log,exp
 from sys import exit
 from numpy import linspace,logspace,argmax
@@ -34,7 +35,7 @@ estimate_atmosphere = False
 calc_water_photo = False
 diags = True
 save_plots = True; plotdir = "saved_plots/"
-save_run = True
+save_run = False#True
 
 #Read in initial luminosity data, establish finer age grid and interpolate luminosity
 if stellar_tracks =='Baraffe': #Baraffe et al. (2015; A&A)
@@ -442,12 +443,13 @@ if save_run:
       savedata = [m_planet, r_planet, a_planet, core_frac, core_den, albedo,
                   m_star, age_star, l_star, d_star,
                   age, envelope_species, c_f_t, e_f_t, r_p_t, m_p_t, mescape_flux_t, e_comp_t]
-      timestamp = str(datetime.datetime.now()).strip().replace(':','_')
+      timestamp = str(datetime.datetime.now()).strip().replace(':','_').replace(' ','-')
       pklfile = timestamp+'.run'
       with open('saved_singleruns/'+pklfile,'wb') as f:
             pkl.dump(savedata,f)
 if plots:
-      fig1,ax1 = plt.subplots()
+      fig1,(ax1,ax1b) = plt.subplots(2)#,sharex='all')
+      plt.subplots_adjust(wspace=0,hspace=0.02)
       if diags:
             ax1.plot(a1,l1,'r--') #lower stellar mass for luminosity interpolation
             ax1.plot(a2,l2,'r--') #upper stellar mass for luminosity interpolation
@@ -455,25 +457,52 @@ if plots:
       ax1.plot(age,luminosity,'k')
       #include saturation timescale
       ax1.plot(tau_sat,luminosity[age.index(tau_sat)],'bo')
-      ax1.text(tau_sat,1.1*luminosity[age.index(tau_sat)],r'${\tau}_{sat}$',color='b',ha='right')
+      ax1.text(tau_sat,1.1*luminosity[age.index(tau_sat)],r'${\tau}_{sat}$',color='b',ha='right',fontsize=12)
       #include the notional start of the main sequence lifetime for star
       ax1.plot(ms_start,luminosity[age.index(ms_start)],'ro',markerfacecolor='None')
-      ax1.text(ms_start,1.1*luminosity[age.index(ms_start)],'MS',color='r',ha='left')
+      ax1.text(ms_start,1.1*luminosity[age.index(ms_start)],'MS',color='r',ha='left',fontsize=12)
       #include the notional age of the system
       ax1.plot(current_age,luminosity[current_age_ind],'x',color='gray')
-      ax1.text(current_age,1.1*luminosity[current_age_ind],'Today',color='gray',ha='center')
+      ax1.text(current_age,1.1*luminosity[current_age_ind],'Today',color='gray',ha='center',fontsize=12)
       ax1.set_xscale('log'); ax1.set_yscale('log')
-      ax1.set_xlabel("Age [Gyr]"); ax1.set_ylabel("Luminosity [L/L$_{\odot}$]")
+      #ax1.set_xlabel("Age [Gyr]")
+      ax1.set_ylabel("Luminosity [L/L$_{\odot}$]",fontsize=16)
       ax1.set_xlim(0.9*min(age),1.2*max(age))
       ax1.set_ylim(0.9*min(l1),1.2*max(luminosity))
       ax1.set_yticks([0.01,0.1])
       ax1.set_yticklabels(['0.01','0.1'])
+      ax1.set_xticks([])
+      ax1b.plot(age,xuv_flux,'k--',label='XUV')
+      ax1b.plot(age,xray_flux,'r',label='X-ray')
+      ax1b.plot(age,euv_flux,'b',label='EUV')
+      plt.legend(loc='best',fontsize=16)
+      ax1b.set_xscale('log'); ax1b.set_yscale('log')
+      ymin, ymax = ax1b.get_ylim()
+      ax1b.set_xlim(0.9*min(age),1.2*max(age))
+      ax1c = ax1b.twinx()
+      ax1c.loglog(age,xuv_flux_Earth,'None')
+      ax1c.set_ylabel(r"XUV flux [F/F$_{\oplus}$]",fontsize=16)
+#      ax1b.plot([min(age),max(age)],[1e4,1e4],color='gray',linestyle='-.')
+#      print(f"XUV flux drops below 1E4 erg/cm2/s at {age[find_nearest(xuv_flux,1E4)]} Gyr.")
+      ax1b.set_xlabel("Age [Gyr]",fontsize=16); ax1b.set_ylabel(r"Flux [ergs/cm2/s]",fontsize=16)
+      ax1c.set_ylim(ymin/xuv_Sun, ymax/xuv_Sun)
+#      ax1b.set_title(stellar_tracks+" et al.-based X-ray, EUV, and XUV evolution "+str(match)+" M$_{\odot}$ star")
 #      ax1.set_title(stellar_tracks+" et al. luminosity evolution for "+str(match)+" M$_{\odot}$ star\n"
 #            +"Luminosities for bookend masses(r--) and interpolation(k)")
-      fig1.tight_layout()
+      ax1.tick_params(axis='x',which='both',direction='in',labelbottom='off')
+      ax1.axes.xaxis.set_ticklabels([])
+      ax1b.tick_params(axis='x',which='both',direction='out',labelbottom='on')
+      custom_format = FuncFormatter(lambda x,_: '{0:g}'.format(x) if 0.1<=x<=10 else '10$^{{{0:.0g}}}$'.format(log10(x)))
+      ax1b.xaxis.set_major_formatter(custom_format)
+      for label in (ax1b.get_xticklabels() + ax1b.get_yticklabels() + ax1.get_yticklabels() + ax1c.get_yticklabels() ):
+            label.set_fontsize(16)
+      #ax1b.axes.xaxis.set_visible(True)
+      #fig1.tight_layout()
       plt.show()
       if save_plots:
-            fig1.savefig(plotdir+'luminosity_MS_tau_i_vs_time.png',dpi=200)
+            fig1.savefig(plotdir+'luminosity_MS_tau_i_XUV_vs_time.png',dpi=300)
+exit()
+
 
 if plots:
       envelope_spec_names = [''.join(f"$_{c}$" if c.isdigit() else c for c in nam) for nam in envelope_species]
@@ -493,7 +522,7 @@ if plots:
       ax2.set_ylabel(r"Mass [$M_{\oplus}$]")
       plt.setp(ax2.get_xticklabels(),visible=False)
 #      ax2.text(current_age,0.85*m_p_t[current_age_ind],'Today',color='gray',ha='center')
-      ax2b = plt.subplot(212,sharex=ax2) #ax2.twinx()
+      ax2b = plt.subplot(122,sharex=ax2) #ax2.twinx()
       for i in range(len(envelope_species)):
             e_comp_t_spec = [e_comp_t[j][i] for j in range(len(age))] #vmr_t[j][i] for j in range(len(age))]
             #ax2b.plot(age,e_comp_t_spec,label=envelope_species[i])
