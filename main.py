@@ -494,6 +494,8 @@ if plots:
       ax1b.tick_params(axis='x',which='both',direction='out',labelbottom='on')
       custom_format = FuncFormatter(lambda x,_: '{0:g}'.format(x) if 0.1<=x<=10 else '10$^{{{0:.0g}}}$'.format(log10(x)))
       ax1b.xaxis.set_major_formatter(custom_format)
+      ax1c.yaxis.set_major_formatter(custom_format)
+      ax1b.yaxis.set_major_formatter(custom_format)
       for label in (ax1b.get_xticklabels() + ax1b.get_yticklabels() + ax1.get_yticklabels() + ax1c.get_yticklabels() ):
             label.set_fontsize(16)
       #ax1b.axes.xaxis.set_visible(True)
@@ -501,7 +503,6 @@ if plots:
       plt.show()
       if save_plots:
             fig1.savefig(plotdir+'luminosity_MS_tau_i_XUV_vs_time.png',dpi=300)
-exit()
 
 
 if plots:
