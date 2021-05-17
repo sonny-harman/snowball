@@ -507,8 +507,8 @@ if plots:
 
 if plots:
       envelope_spec_names = [''.join(f"$_{c}$" if c.isdigit() else c for c in nam) for nam in envelope_species]
-      fig2 = plt.figure()
-      ax2 = plt.subplot(211)
+      fig2,(ax2,ax2b) = plt.subplots(2,sharex='all')
+      #ax2 = plt.subplot(211)
       ax2.plot(age,m_p_t,'k',label=r'Planet Mass')
       ax2.set_xscale('log')
       ax2.text(age[0],m_p_t[0],'Planet',c='k',ha='left',va='top')
@@ -523,7 +523,7 @@ if plots:
       ax2.set_ylabel(r"Mass [$M_{\oplus}$]")
       plt.setp(ax2.get_xticklabels(),visible=False)
 #      ax2.text(current_age,0.85*m_p_t[current_age_ind],'Today',color='gray',ha='center')
-      ax2b = plt.subplot(122,sharex=ax2) #ax2.twinx()
+      #ax2b = plt.subplot(122,sharex=ax2) #ax2.twinx()
       for i in range(len(envelope_species)):
             e_comp_t_spec = [e_comp_t[j][i] for j in range(len(age))] #vmr_t[j][i] for j in range(len(age))]
             #ax2b.plot(age,e_comp_t_spec,label=envelope_species[i])
