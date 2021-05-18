@@ -175,7 +175,7 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
       mu_t = [f_mu(e_comp_t[-1],envelope_compm)]
       vmr_t = [f_vmr(e_comp_t[-1],mu_t[-1],envelope_compm)]
       Htot = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
-      epsilon_t = [max(efficiencies[0]*Htot,f_mult(vmr_t[-1],efficiencies))]#f_mult(vmr_t[-1],efficiencies)] 
+      eta_t = [max(efficiencies[0]*Htot,f_mult(vmr_t[-1],efficiencies))]#f_mult(vmr_t[-1],efficiencies)] 
       escape_flux_t = []; mescape_flux_t = []
       crossover_mass_t = []; mass_change = 0.
       new_mass = [0 for i in range(len(envelope_species))]
@@ -208,7 +208,7 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
       if diags:
             print(f"Starting from {round(age[start[0]],3)} Gyr, L/L_sol = {luminosity[start[0]]:6.4f}, XUV/L_bol = {saturation[start[0]]:8.2e}")
             print('Starting values for some variables:')
-            print('Roche = ',roche_t,' Ktide = ',ktide_t,' mu = ',mu_t,' T_eq = ',T_eq_t,' epsilon = ',epsilon_t)
+            print('Roche = ',roche_t,' Ktide = ',ktide_t,' mu = ',mu_t,' T_eq = ',T_eq_t,' eta = ',eta_t)
             print('core_frac = ',c_f_t,' envelope_frac = ',e_f_t)
             print(f' envelope_comp: {envelope_species} = {envelope_comp}')
 
@@ -254,26 +254,26 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                         T_exo = 2E3 
                         #c_p_exo = sum([f_c_p(envelope_species[i],T_exo)*vmr_t[-1][i] for i in range(len(vmr_t[-1]))])*Rconst #J/K/mol
                         #gamma_exo = c_p_exo/(c_p_exo - Rconst)
-                  Mp_p2e, flux1, flux2 = calc_escape_regime(epsilon_t[-1],m_p_kg,r_p_m,T_exo,mu_t[-1],hnu)
+                  Mp_p2e, flux1, flux2 = calc_escape_regime(eta_t[-1],m_p_kg,r_p_m,T_exo,mu_t[-1],hnu)
                   #convert both fluxes from photon/m2/s to erg/cm2/s
                   flux1 = flux1*hnu/ergcm2s2Wm2
                   flux2 = flux2*hnu/ergcm2s2Wm2
                   mp_crit.append(Mp_p2e/m_Earth)
                   F_RR2photon.append(flux1.real)
                   F_RR2energy.append(flux2.real)
-                  if critical_xuv_time < 0. and xuv_flux[i]<f_xuvcr(m_p_t[-1],r_p_t[-1],epsilon_t[-1]):
+                  if critical_xuv_time < 0. and xuv_flux[i]<f_xuvcr(m_p_t[-1],r_p_t[-1],eta_t[-1]):
                         critical_xuv_time = age[i]
                         if diags:
-                              print(f"Critical XUV flux (O loss) = {f_xuvcr(m_p_t[-1],r_p_t[-1],epsilon_t[-1]):8.2e} erg/cm2/s")
+                              print(f"Critical XUV flux (O loss) = {f_xuvcr(m_p_t[-1],r_p_t[-1],eta_t[-1]):8.2e} erg/cm2/s")
                               print(f'\nPlanet drops below L&B F_XUV_crit at {critical_xuv_time:6.4f} Gyr.')
                               print(f"XUV flux falls below 40x Earth's (~{xuv_flux[find_nearest(xuv_flux_Earth,40)]:6.2f} erg/cm2/s) at {age[find_nearest(xuv_flux_Earth,40)]:6.4f} Gyr.\n")
                   if diags and i == current_age_ind:
-                  #      print(epsilon_t[-1],m_p_kg,r_p_m,T_eq_t[-1],mu_t[-1],vmr_t[-1])
+                  #      print(eta_t[-1],m_p_kg,r_p_m,T_eq_t[-1],mu_t[-1],vmr_t[-1])
                         print(f'{age[i]:5.3f}-Gyr critical mass = {mp_crit[-1]:8.3f} Earth masses\n'+
                               f'RR/photon flux threshold = {F_RR2photon[-1]:10.2e} erg/cm2/s\n'+
                               f'RR/energy flux threshold = {F_RR2energy[-1]:10.2e} erg/cm2/s\n')
                   #include diffusion limit
-                  ref_H_flux = epsilon_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H) #H/m2/s
+                  ref_H_flux = eta_t[-1]*xuv_flux[i]*ergcm2s2Wm2*r_p_m/(4*G*m_p_kg*ktide_t[-1]*m_H) #H/m2/s
                   Htot = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
                   Htot_mass = sum([v*H for v,H in zip(vmr_t[-1],envelope_compH)]) #assuming that H in other species is available for escape
                   #Select escape regime based on XUV threshold fluxes
@@ -290,11 +290,11 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                         RR_loss = RR_loss + mflux*dts/m_Earth
                   elif Htot > 0.01: #If [H] is prevalent, we enter the energy-limited regime
                         #calculate energy-limited escape rate following Luger & Barnes (2015)
-                        mflux = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
+                        mflux = eta_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
                         regime_t.append(1)
                         energy_loss = energy_loss + mflux*dts/m_Earth
                   else: #we're stuck in the diffusion-limited regime, which also respects the energy limit
-                        energy_limit = epsilon_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
+                        energy_limit = eta_t[-1]*pi*xuv_flux[i]*ergcm2s2Wm2*r_p_m*rbase**2/(G*m_p_kg*ktide_t[-1]) #kg/s
                         donotuse,diff_limit = crossover_mass(T_eq_t[-1],ref_H_flux,grav_t[-1],Htot,mu_t[-1])
                         diffusion_limit = diff_limit*4*pi*r_p_m**2*m_H #kg/s
                         mflux = min(energy_limit,diffusion_limit)
@@ -390,11 +390,11 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                         if any([m>0 for m in e_comp_t[-1]]):
                               mu_t.append(f_mu(e_comp_t[-1],envelope_compm))
                               vmr_t.append(f_vmr(e_comp_t[-1],mu_t[-1],envelope_compm))
-                              epsilon_t.append(max(efficiencies[0]*Htot,f_mult(vmr_t[-1],efficiencies)))
+                              eta_t.append(max(efficiencies[0]*Htot,f_mult(vmr_t[-1],efficiencies)))
                         else:
                               mu_t.append(44)
                               vmr_t.append([0 for s in envelope_species])
-                              epsilon_t.append(0.01)
+                              eta_t.append(0.01)
             
             if mode == 'reverse' and j == 0:
                   #Flip variables so that they're aligned with *age* variable
@@ -405,7 +405,7 @@ def run_escape(age_star,l_star,m_planet,r_planet,envelope_comp,efficiencies):
                   roche_t.reverse(); ktide_t.reverse()
                   mp_crit.reverse(); F_RR2photon.reverse(); F_RR2energy.reverse()
                   regime_t.reverse()
-                  epsilon_t.reverse(); crossover_mass_t.reverse()
+                  eta_t.reverse(); crossover_mass_t.reverse()
                   mescape_flux_t.reverse()
                   escape_flux_t.reverse()
                   mp_crit.reverse(); F_RR2photon.reverse(); F_RR2energy.reverse()

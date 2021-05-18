@@ -211,8 +211,8 @@ def read_pt_profile():
             t.append(float(l.split()[3]))
       return p,alt,t
 
-def calc_escape_regime(epsilon,mp,rp,T,mu,hnu):
-      photon_energy_mass = epsilon*rp*hnu/(4*G*m_H)
+def calc_escape_regime(eta,mp,rp,T,mu,hnu):
+      photon_energy_mass = eta*rp*hnu/(4*G*m_H)
       cs2 = kb*T/(m_H*mu) #alternate sound speed calculation
       alpha_B = 2.6E-19*(T/1E4)**-0.7           #cm3/s to m3/s conversion included; from Owen & Alvarez (2016)
       H_min = min(rp/3,cs2*(rp)**2./(2*G*mp))   #m
