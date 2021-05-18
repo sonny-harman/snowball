@@ -31,7 +31,7 @@ envelope_comp = [0.0,0,1.,0] #[0.31764360070863473, 4.386069211982582e-51, 0.682
 envelope_species= ['H2', 'He',  'H2O', 'O'] #component molecular masses [amu]
 envelope_compm= [2, 4, 18, 16] #component molecular masses [amu]
 envelope_compH= [1, 0., 2/3, 0.] #fraction of atoms that are H in each species
-efficiencies = [0.3, 0.1, 0.01, 0.01] #escape efficiency epsilon for each component
+efficiencies = [0.3, 0.1, 0.01, 0.01] #escape efficiency eta for each component
 
 #Variables related to escape
 do_emp_sat = True   #empirically match the saturated and subsaturated regime rates from Sanz-Forcada et al. (2011), eq. 5
