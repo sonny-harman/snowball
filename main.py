@@ -337,9 +337,9 @@ for j in range(len(start)):
                               vmr_heavy = sum([vmr_t[-1][si] for si in escaping_species])
                               mu_escaping = f_mu(escaping_MMRs,escaping_mus)*sum(escaping_MMRs)
                               b_H = generic_diffusion(1.,mu_t[-1],T_eq_t[-1])
-                              phi_prime = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
+                              m_c_temp = kb*T_eq_t[-1]*eflux/(b_H*grav_t[-1]*mu_escaping*m_H)
                               if escaping_species.index(s) < len(escaping_species)-1:
-                                    m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + phi_prime
+                                    m_c_prime = 1 + ((mu_heavy - 1)*mu_heavy*vmr_heavy)/mu_escaping + m_c_temp
                         else:
                               too_heavy = escaping_species.index(s)
                               break
